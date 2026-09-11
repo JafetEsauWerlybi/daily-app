@@ -1,5 +1,20 @@
 {
+  "permissions": {
+    "allow": [
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "Edit(G:\\daily\\fe-daily\\daily-fe\\.claude\\CLAUDE.md)",
+      "Edit(G:\\daily\\MOBILE_APP.md)",
+      "Edit(G:\\daily\\README.md)",
+      "Bash(node -e \"console.log\\(JSON.stringify\\(require\\('./.claude/settings.json'\\), null, 2\\)\\)\")",
+      "Bash(git ls-remote *)",
+      "Bash(git add *)"
+    ]
+  },
   "enabledPlugins": {
-    "expo@claude-plugins-official": true
+    "expo@claude-plugins-official": true,
+    "superpowers@superpowers-marketplace": true,
+    "feature-dev@claude-plugins-official": true,
+    "claude-md-management@claude-plugins-official": true
   }
 }

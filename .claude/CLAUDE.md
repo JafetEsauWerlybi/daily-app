@@ -18,7 +18,10 @@ FontAwesome: @fortawesome/react-native-fontawesome + @fortawesome/free-solid-svg
 AsyncStorage: @react-native-async-storage/async-storage 2.2.0 (para persistencia de auth)
 SafeAreaContext: react-native-safe-area-context (NO usar SafeAreaView de react-native)
 StatusBar: expo-status-bar (para manejo transparente de barra de estado)
+WheelPicker: @quidone/react-native-wheel-picker (JS puro, sin código nativo — usado para date/time pickers tipo rueda)
 ```
+
+**NO instalados (probados y revertidos):** `@gorhom/bottom-sheet`, `@react-native-community/datetimepicker`. Ver sección "Problemas Resueltos" abajo antes de volver a intentarlos.
 
 **Regla crítica:** Leer docs exactas a la versión de Expo en https://docs.expo.dev/versions/v57.0.0/
 
@@ -98,6 +101,19 @@ Esta línea es OBLIGATORIA al inicio del render para remover el componente compl
 - `showLoading()` antes de login, se auto-oculta cuando entra el usuario o falla
 - NO usar `router.replace()` (causa flash blanco); usar `router.navigate()`
 
+### 6. **Add Task Modal (CRÍTICO — no usar librerías de bottom-sheet)**
+**Problema:** Se intentó usar `@gorhom/bottom-sheet` (con `GestureHandlerRootView` + `BottomSheetModalProvider` en `_layout.tsx` raíz) para el modal de "Nueva tarea". Dos fallas:
+1. Conflicto de peer-deps: `react-native-reanimated@4.5.1` (el que realmente queda instalado) pide `react-native-worklets@0.10.x`, pero `@gorhom/bottom-sheet` + npm intentaban resolver `reanimated` a `4.6.0`, que pide `worklets@0.12.x` — y `expo-modules-core` (parte del propio SDK 57) exige `worklets@0.10.x`. No hay combinación que satisfaga a los tres a la vez sin `--legacy-peer-deps`.
+2. Aun instalando con `--legacy-peer-deps`, el `BottomSheetModal` no se hacía visible en Android (probado en Samsung A15) — ni con `enableDynamicSizing={false}` ni ajustando snapPoints.
+
+**Solución:** Modal nativo de React Native (`<Modal transparent animationType="none">`) + `Animated.Value` propio para el slide-up/fade, mismo patrón que `ConfirmModal.tsx`. Backdrop y sheet son **hermanos** (no padre/hijo) dentro de un `View` — el backdrop tiene su propio `TouchableWithoutFeedback onPress={handleClose}`, y el sheet NO está envuelto por ningún `Touchable`.
+
+**No repetir:** No envolver el contenido scrolleable del sheet (ni sus wheel pickers) dentro de un `TouchableWithoutFeedback` — la negociación de gesto de "tap" de ese componente compite con el gesto de scroll/drag de listas internas (`ScrollView`, wheel pickers) y las deja "pegadas" sin responder al arrastre.
+
+**Wheel pickers (fecha/hora):** se usa `@quidone/react-native-wheel-picker` (`DatePicker` para fecha, `WheelPicker` para hora/minuto) — es JS puro, sin módulos nativos, así que no reintroduce el problema de peer-deps de `worklets`. Props clave para tamaño: `itemHeight` (alto de cada fila, default 48) y `visibleItemCount` (filas visibles, default 5) — en este proyecto se usan `PICKER_ITEM_HEIGHT = 34` y `PICKER_VISIBLE_ITEMS = 3` (declaradas en `AddTaskModal.tsx`) para que las ruedas no se vean sobredimensionadas.
+
+**Scroll del contenido:** el modal completo puede exceder la pantalla al abrir un wheel picker. Se envuelve el bloque de campos (Título → Días) en un `ScrollView` normal (sin librería), dejando el handle+título fijos arriba y los botones Cancelar/Guardar fijos abajo (fuera del `ScrollView`). El `ScrollView` interno de los wheel pickers de `@quidone` convive bien anidado dentro de este `ScrollView` exterior (ambos son `ScrollView` nativos estándar, no hay competencia de `Touchable` de por medio).
+
 ---
 
 ## 🎨 Estilos & Tipografía (HOMOLOGACIÓN REQUERIDA)
@@ -149,6 +165,26 @@ Error: text-red-500
 | Buttons | `bg-purple-500 rounded-lg py-3` + `MomoTrustSans-SemiBold` |
 | Inputs | `bg-slate-800 border border-gray-700 rounded-lg px-3 py-2` + `MomoTrustSans-Regular` |
 
+### Wheel Pickers (fecha/hora — `@quidone/react-native-wheel-picker`)
+Esta librería no acepta clases NativeWind directamente en sus items (renderiza su propio `ScrollView` interno), así que su estilo se define con objetos de estilo planos, homologados a la paleta del proyecto:
+
+```tsx
+const PICKER_ITEM_HEIGHT = 34;   // alto de cada fila (default de la librería: 48)
+const PICKER_VISIBLE_ITEMS = 3;  // filas visibles a la vez (default de la librería: 5)
+
+const pickerItemTextStyle = {
+  color: '#e9e9ed',                  // mismo tono que --color-text
+  fontFamily: 'MomoTrustSans-Medium',
+  fontSize: 15,
+};
+const pickerOverlayStyle = {
+  backgroundColor: 'rgba(145, 132, 217, 0.12)', // acento #9184d9 con opacidad baja
+  borderRadius: 8,
+};
+```
+
+El contenedor (`View`) que envuelve cada wheel sí usa NativeWind normal: `bg-slate-800 border border-gray-700 rounded-lg py-0.5`.
+
 ---
 
 ## 🎭 Componentes & Iconografía (FontAwesome)
@@ -178,6 +214,7 @@ import { faListCheck, faTableCellsLarge, faCalendarDays, faUser } from '@fortawe
 ### Componentes Reutilizables
 - **ConfirmModal** (`src/components/ConfirmModal.tsx`): Modal personalizado con animación, sin usar Alert nativo
 - **LoadingScreen** (`src/components/LoadingScreen.tsx`): Spinner animado + "Cargando..." pulsante
+- **AddTaskModal** (`src/components/AddTaskModal.tsx`): Modal nativo (mismo patrón que ConfirmModal) con `ScrollView` interno y wheel pickers de `@quidone/react-native-wheel-picker` para fecha/hora. Ver sección "Add Task Modal (CRÍTICO)" arriba.
 
 ---
 
@@ -203,14 +240,17 @@ src/
 ├── components/
 │   ├── ConfirmModal.tsx
 │   ├── LoadingScreen.tsx
+│   ├── AddTaskModal.tsx         (Modal nativo + wheel pickers, ver sección "Add Task Modal")
 │   └── [otros componentes...]
+├── constants/
+│   └── categories.ts            (TASK_CATEGORIES, CATEGORY_COLORS — compartido entre Hoy y AddTaskModal)
 ├── contexts/
 │   ├── auth-context.tsx         (onAuthStateChanged, login, register, logout)
 │   ├── loading-context.tsx      (Global spinner overlay)
 │   └── navigation-history-context.tsx  (Historial de tabs)
 ├── hooks/
 │   ├── use-back-handler.ts      (useFocusEffect + BackHandler)
-│   ├── use-tasks.ts             (Firestore real-time tasks)
+│   ├── use-tasks.ts             (Firestore real-time tasks, incluye addTask)
 │   └── [otros hooks...]
 ├── lib/
 │   └── firebase.ts              (initializeAuth con AsyncStorage)
@@ -277,6 +317,8 @@ module.exports = withNativeWind(config, { input: './src/global.css' });
 | Emojis inconsistentes | Mezcla emoji + IconFont | Todos con FontAwesome | Definir paleta visual antes |
 | Fuentes no se cargan | Ruta relativa mal (`@/assets/`) | Ruta relativa desde _layout (`../../assets/`) | Probar font load antes de commit |
 | Navigator.replace() flash blanco | Reemplazo inmediato de stack | Usar router.navigate() | Prefer navigate over replace |
+| `@gorhom/bottom-sheet` no visible en Android + conflicto worklets | Peer-dep de reanimated/worklets sin resolución única + sheet no renderiza en Android | Modal nativo `<Modal>` + `Animated.Value` propio | No instalar librerías de bottom-sheet sin verificar antes en dispositivo real |
+| Wheel picker "pegado" (no gira) | `TouchableWithoutFeedback` envolvía todo el sheet, compitiendo por el gesto con el `ScrollView` interno del picker | Backdrop y sheet como hermanos, sheet sin `Touchable` envolvente | No envolver contenido con `ScrollView`/gestos dentro de un `TouchableWithoutFeedback` |
 
 ---
 
@@ -295,13 +337,15 @@ module.exports = withNativeWind(config, { input: './src/global.css' });
 
 ## 🚀 Próximos Pasos Pendientes
 
-1. **Implementar Tablero** — 3 checkboxes (filtro) + secciones de tareas por estado
-2. **Implementar Calendario** — Vista semanal/mensual/anual
-3. **Implementar Profile sub-screens** — Notificaciones, Apariencia, Cuenta, Privacidad, Ayuda
-4. **OAuth Google & Apple** — Botones de login ya existen, falta integración
-5. **Firebase Cloud Messaging** — Push notifications
-6. **Firestore Security Rules** — Publicar reglas de seguridad
-7. **Testing en dispositivos reales** — Verificar en Android + iOS físicos
+1. **Validación de datos del Add Task Modal** — actualmente `handleSave` solo hace `console.log` (el `onSubmit` real está comentado en `AddTaskModal.tsx`), falta validar campos y reconectar a `addTask`
+2. **Implementar Tablero** — 3 checkboxes (filtro) + secciones de tareas por estado
+3. **Implementar Calendario** — Vista semanal/mensual/anual
+4. **Implementar Profile sub-screens** — Notificaciones, Apariencia, Cuenta, Privacidad, Ayuda
+5. **OAuth Google & Apple** — Botones de login ya existen, falta integración
+6. **Programar notificación local real** para la hora seleccionada en Add Task (hoy solo se guarda el campo `time`, no se agenda con `expo-notifications`)
+7. **Firebase Cloud Messaging** — Push notifications
+8. **Firestore Security Rules** — Publicar reglas de seguridad
+9. **Testing en dispositivos reales** — Verificar en Android + iOS físicos
 
 ---
 
@@ -338,20 +382,21 @@ npx tsc --noEmit
 
 ---
 
-## 📌 Última Sesión: 2026-09-09
+## 📌 Última Sesión: 2026-09-11
 
 **Logros:**
-✅ Implementado historial de navegación real (pila cronológica)
-✅ Modal personalizado para confirmación de salida (ConfirmModal)
-✅ SafeArea + StatusBar arreglado (contenido ya no bajo barra de estado)
-✅ Homologación visual completa (NativeWind + Momo + FontAwesome en todas las pantallas)
-✅ Firebase persistencia de auth (AsyncStorage)
-✅ Back button handler con historial robusta
+✅ Add Task Modal implementado (`src/components/AddTaskModal.tsx`) — Título, Etiqueta, Rango de fechas, Hora de notificación, Días de repetición + "Todos los días"
+✅ Wheel pickers de fecha/hora con `@quidone/react-native-wheel-picker` (JS puro, sin módulos nativos)
+✅ Probado y descartado `@gorhom/bottom-sheet` (conflicto de peer-deps + no visible en Android) — ver sección "Add Task Modal (CRÍTICO)"
+✅ Scroll interno del modal (ScrollView) con botones de acción fijos, sin romper el gesto de los wheel pickers
+✅ `src/constants/categories.ts` extraído para compartir colores/categorías entre Hoy y AddTaskModal
 
-**Próxima sesión:** Implementar Tablero (board), Calendario, y OAuth.
+**Pendiente inmediato:** `handleSave` en `AddTaskModal.tsx` actualmente solo hace `console.log` — el `onSubmit` real a Firestore está comentado a la espera de la tarea de validación de datos.
+
+**Próxima sesión:** Validación de datos del modal, reconectar `onSubmit`, luego Tablero y Calendario.
 
 ---
 
-**Escrito por:** Claude Haiku 4.5  
-**Fecha:** 2026-09-09  
+**Escrito por:** Claude Sonnet 5  
+**Fecha:** 2026-09-11  
 **Proyecto:** Daily! Task Manager
