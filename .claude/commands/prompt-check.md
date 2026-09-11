@@ -7,15 +7,15 @@ Entrada: $ARGUMENTS
 1. Objetivo claro — ¿se entiende el resultado final esperado? Mejora: pedir una frase tipo "quiero que X termine haciendo Y".
 2. Alcance/límites — ¿dice qué tocar y qué no? Mejora: nombrar archivos/módulos explícitos y excluir el resto.
 3. Contexto técnico previo — ¿describe el error o comportamiento actual vs esperado? Mejora: incluir el síntoma exacto, no algo vago.
-4. Criterio de éxito verificable — ¿hay forma de saber cuándo terminó (test, ejemplo de output)? Mejora: agregar caso de prueba concreto.
+4. Criterio de éxito verificable — ¿hay forma de saber cuándo terminó (test, ejemplo de output)?. Si es un cambio de diseño que no afecte procesos lógicos tales como "cambiar padding", "agrandar card" entre más, tomar como punto valido y esperar feedback del usuario. Mejora: agregar caso de prueba concreto.
 5. Tono/urgencia — ¿es directivo y específico o ambiguo/pasivo? Mejora: usar verbos imperativos ("cambia", "agrega", "no toques").
 6. Interpretación libre — ¿deja decisiones de diseño sin guía (naming, estructura, UI)? Mejora: decidirlas de antemano o decir "decide tú y explica por qué".
 7. Restricciones de proceso — ¿recuerda reglas críticas del proyecto (no commits/builds automáticos, no simplificar flujos críticos)? Mejora: reafirmarlas si la tarea es sensible.
 8. Tamaño de la tarea — ¿es atómica o mezcla varias tareas grandes no relacionadas? Mejora: dividir en pasos o pedir plan primero.
-9. Huecos no mencionados — detecta lo que falta (rama, tests a correr, si afecta mobile+web, migraciones). Mejora: listar qué se asumió por defecto.
-10. Formato de respuesta esperado — ¿dice cómo quiere la respuesta (diff, código directo, sin resúmenes)? Mejora: especificarlo si importa.
+9. Huecos no mencionados — Impacto en el proyecto a varios modulos y procesos, definición si es solo cambios de diseño, afecta procesos BE Mejora: listar qué se asumió por defecto.
+10. Formato de respuesta esperado — ¿dice cómo quiere la respuesta (diff, código directo, sin resúmenes)? Solo aplica cuando el usuario pide un tipo de plan, reporte, listado explicación de flujo, cuando es un bug, cambio simple etc no pedir. Mejora: especificarlo si importa.
 
-## Salida (texto plano, sin emojis, sin preamble)
+## Salida (texto plano, sin emojis, sin preamble, formato markdown, sin scroll horizontal/vertical)
 
 ```
 Score: X.X/10
@@ -30,8 +30,9 @@ OK: N, N, N
 - Score < 9: muestra el bloque de salida y DETENTE. No ejecutes la tarea. Pregunta: "Score debajo de 9. ¿Ajusto el prompt o fuerzas la ejecución igual?"
 
 ## Reglas
+
 - Sin emojis, sin preamble
 - Máximo 1 línea por punto
 - Solo estos 10 puntos, ninguno extra
 - N/A si no aplica; no cuenta en el promedio
-- Este comando es local a SACSProv2, no se replica a otros proyectos
+- Este comando es local a Daily!, no se replica a otros proyectos
