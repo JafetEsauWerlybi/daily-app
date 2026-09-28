@@ -4,7 +4,7 @@ import WheelPicker, { DatePicker } from "@quidone/react-native-wheel-picker";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
-  Modal,
+  BackHandler,
   ScrollView,
   Text,
   TextInput,
@@ -42,6 +42,7 @@ function parseTimeStr(str: string): { hour: number; minute: number } {
 
 const PICKER_ITEM_HEIGHT = 34;
 const PICKER_VISIBLE_ITEMS = 3;
+const PICKER_PLACEHOLDER_HEIGHT = PICKER_ITEM_HEIGHT * PICKER_VISIBLE_ITEMS;
 
 const pickerItemTextStyle = {
   color: "#e9e9ed",
@@ -78,6 +79,27 @@ export function AddTaskModal({
   const insets = useSafeAreaInsets();
   const translateY = useRef(new Animated.Value(400)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+  const dateFade = useRef(new Animated.Value(0)).current;
+  const timeFade = useRef(new Animated.Value(0)).current;
+
+  // Precalienta Intl.DateTimeFormat('es-MX', ...) en segundo plano: la primera
+  // construcción de un formatter con este locale es lenta en Hermes y es lo que
+  // usa @quidone/react-native-wheel-picker internamente para nombres de mes.
+  useEffect(() => {
+    const id = setTimeout(() => {
+      try {
+        new Intl.DateTimeFormat("es-MX", { month: "long" }).format(new Date());
+        new Intl.DateTimeFormat("es-MX", {
+          year: "numeric",
+          month: "numeric",
+          day: "numeric",
+        }).formatToParts(new Date());
+      } catch {
+        // Intl no disponible o locale no soportado: no hay nada que precalentar.
+      }
+    }, 400);
+    return () => clearTimeout(id);
+  }, []);
 
   const [title, setTitle] = useState(initialTitle);
   const [category, setCategory] = useState<TaskCategory>("Personal");
@@ -89,6 +111,9 @@ export function AddTaskModal({
     "start" | "end" | null
   >(null);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [mounted, setMounted] = useState(visible);
+  const [dateEverOpened, setDateEverOpened] = useState(false);
+  const [timeEverOpened, setTimeEverOpened] = useState(false);
 
   const { hour: selectedHour, minute: selectedMinute } = useMemo(
     () => parseTimeStr(time),
@@ -97,6 +122,7 @@ export function AddTaskModal({
 
   useEffect(() => {
     if (visible) {
+      setMounted(true);
       setTitle(initialTitle);
       Animated.parallel([
         Animated.spring(translateY, {
@@ -111,10 +137,29 @@ export function AddTaskModal({
         }),
       ]).start();
     } else {
-      translateY.setValue(400);
-      opacity.setValue(0);
+      Animated.parallel([
+        Animated.timing(translateY, {
+          toValue: 400,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start(() => setMounted(false));
     }
   }, [visible, initialTitle, translateY, opacity]);
+
+  useEffect(() => {
+    if (!visible) return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      onClose();
+      return true;
+    });
+    return () => sub.remove();
+  }, [visible, onClose]);
 
   const resetForm = () => {
     setTitle("");
@@ -125,6 +170,10 @@ export function AddTaskModal({
     setRepeatDays([]);
     setActiveDatePicker(null);
     setShowTimePicker(false);
+    setDateEverOpened(false);
+    setTimeEverOpened(false);
+    dateFade.setValue(0);
+    timeFade.setValue(0);
   };
 
   const toggleRepeatDay = (day: number) => {
@@ -139,7 +188,35 @@ export function AddTaskModal({
   };
 
   const openDatePicker = (field: "start" | "end") => {
-    setActiveDatePicker((prev) => (prev === field ? null : field));
+    setActiveDatePicker((prev) => {
+      const next = prev === field ? null : field;
+      if (next && !dateEverOpened) {
+        setDateEverOpened(true);
+        dateFade.setValue(0);
+        Animated.timing(dateFade, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }).start();
+      }
+      return next;
+    });
+  };
+
+  const toggleTimePicker = () => {
+    setShowTimePicker((prev) => {
+      const next = !prev;
+      if (next && !timeEverOpened) {
+        setTimeEverOpened(true);
+        timeFade.setValue(0);
+        Animated.timing(timeFade, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }).start();
+      }
+      return next;
+    });
   };
 
   const setHour = (hour: number) => {
@@ -180,12 +257,12 @@ export function AddTaskModal({
     onClose();
   };
 
+  if (!mounted) return null;
+
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      onRequestClose={handleClose}
+    <View
+      className="absolute inset-0 justify-end"
+      style={{ elevation: 20, zIndex: 20 }}
     >
       <View className="flex-1 justify-end">
         <TouchableWithoutFeedback onPress={handleClose}>
@@ -314,25 +391,32 @@ export function AddTaskModal({
               </TouchableOpacity>
             </View>
 
-            {activeDatePicker && (
-              <View className="bg-slate-800 border border-gray-700 rounded-lg py-0.5 mb-2 items-center">
-                <DatePicker
-                  date={
-                    (activeDatePicker === "start" ? dateStart : dateEnd) ||
-                    toDateStr(new Date())
-                  }
-                  onDateChanged={({ date }) => {
-                    if (activeDatePicker === "start") setDateStart(date);
-                    if (activeDatePicker === "end") setDateEnd(date);
-                  }}
-                  locale="es-MX"
-                  itemHeight={PICKER_ITEM_HEIGHT}
-                  visibleItemCount={PICKER_VISIBLE_ITEMS}
-                  itemTextStyle={pickerItemTextStyle}
-                  overlayItemStyle={pickerOverlayStyle}
-                />
-              </View>
-            )}
+            <View
+              className="bg-slate-800 border border-gray-700 rounded-lg py-0.5 mb-2 items-center"
+              style={{ display: activeDatePicker ? "flex" : "none" }}
+            >
+              {dateEverOpened ? (
+                <Animated.View style={{ opacity: dateFade }}>
+                  <DatePicker
+                    date={`${
+                      (activeDatePicker === "end" ? dateEnd : dateStart) ||
+                      toDateStr(new Date())
+                    }T00:00:00`}
+                    onDateChanged={({ date }) => {
+                      if (activeDatePicker === "start") setDateStart(date);
+                      if (activeDatePicker === "end") setDateEnd(date);
+                    }}
+                    locale="es-MX"
+                    itemHeight={PICKER_ITEM_HEIGHT}
+                    visibleItemCount={PICKER_VISIBLE_ITEMS}
+                    itemTextStyle={pickerItemTextStyle}
+                    overlayItemStyle={pickerOverlayStyle}
+                  />
+                </Animated.View>
+              ) : (
+                <View style={{ height: PICKER_PLACEHOLDER_HEIGHT }} />
+              )}
+            </View>
 
             {/* Hora de notificación */}
             <Text
@@ -345,7 +429,7 @@ export function AddTaskModal({
               className={`bg-slate-800 border rounded-lg px-3 py-2.5 mb-2 ${
                 showTimePicker ? "border-purple-400" : "border-gray-700"
               }`}
-              onPress={() => setShowTimePicker((prev) => !prev)}
+              onPress={toggleTimePicker}
             >
               <Text
                 className={
@@ -357,36 +441,46 @@ export function AddTaskModal({
               </Text>
             </TouchableOpacity>
 
-            {showTimePicker && (
-              <View className="flex-row justify-center items-center bg-slate-800 border border-gray-700 rounded-lg py-0.5 mb-4">
-                <WheelPicker
-                  data={HOURS}
-                  value={selectedHour}
-                  onValueChanged={({ item }) => setHour(item.value)}
-                  itemHeight={PICKER_ITEM_HEIGHT}
-                  visibleItemCount={PICKER_VISIBLE_ITEMS}
-                  itemTextStyle={pickerItemTextStyle}
-                  overlayItemStyle={pickerOverlayStyle}
-                  width={64}
-                />
-                <Text
-                  className="text-lg text-gray-400 mx-1"
-                  style={{ fontFamily: "MomoTrustSans-SemiBold" }}
+            <View
+              className="flex-row justify-center items-center bg-slate-800 border border-gray-700 rounded-lg py-0.5 mb-4"
+              style={{ display: showTimePicker ? "flex" : "none" }}
+            >
+              {!timeEverOpened ? (
+                <View style={{ height: PICKER_PLACEHOLDER_HEIGHT }} />
+              ) : (
+                <Animated.View
+                  className="flex-row justify-center items-center"
+                  style={{ opacity: timeFade }}
                 >
-                  :
-                </Text>
-                <WheelPicker
-                  data={MINUTES}
-                  value={selectedMinute}
-                  onValueChanged={({ item }) => setMinute(item.value)}
-                  itemHeight={PICKER_ITEM_HEIGHT}
-                  visibleItemCount={PICKER_VISIBLE_ITEMS}
-                  itemTextStyle={pickerItemTextStyle}
-                  overlayItemStyle={pickerOverlayStyle}
-                  width={64}
-                />
-              </View>
-            )}
+                  <WheelPicker
+                    data={HOURS}
+                    value={selectedHour}
+                    onValueChanged={({ item }) => setHour(item.value)}
+                    itemHeight={PICKER_ITEM_HEIGHT}
+                    visibleItemCount={PICKER_VISIBLE_ITEMS}
+                    itemTextStyle={pickerItemTextStyle}
+                    overlayItemStyle={pickerOverlayStyle}
+                    width={64}
+                  />
+                  <Text
+                    className="text-lg text-gray-400 mx-1"
+                    style={{ fontFamily: "MomoTrustSans-SemiBold" }}
+                  >
+                    :
+                  </Text>
+                  <WheelPicker
+                    data={MINUTES}
+                    value={selectedMinute}
+                    onValueChanged={({ item }) => setMinute(item.value)}
+                    itemHeight={PICKER_ITEM_HEIGHT}
+                    visibleItemCount={PICKER_VISIBLE_ITEMS}
+                    itemTextStyle={pickerItemTextStyle}
+                    overlayItemStyle={pickerOverlayStyle}
+                    width={64}
+                  />
+                </Animated.View>
+              )}
+            </View>
 
             {/* Días que se realizará */}
             <View className="flex-row items-center justify-between mb-2">
@@ -480,6 +574,6 @@ export function AddTaskModal({
           </View>
         </Animated.View>
       </View>
-    </Modal>
+    </View>
   );
 }

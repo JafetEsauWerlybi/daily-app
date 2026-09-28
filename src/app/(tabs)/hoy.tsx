@@ -6,10 +6,11 @@ import { useBackHandler } from "@/hooks/use-back-handler";
 import { useTasks } from "@/hooks/use-tasks";
 import { faCheck, faPlus } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-native-fontawesome";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   Text,
   TextInput,
   TouchableOpacity,
@@ -22,9 +23,23 @@ export default function HoyScreen() {
   const { tasks, loading, toggleTask, addTask } = useTasks(user?.uid);
   const [newTaskText, setNewTaskText] = useState("");
   const [addModalVisible, setAddModalVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // Manejar botón de regresar: navega por historial de tabs o pide confirmar salida
   const { exitModalVisible, confirmExit, cancelExit } = useBackHandler("hoy");
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener("keyboardDidShow", (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const handleQuickAdd = async () => {
     if (!newTaskText.trim() || !user) return;
@@ -39,11 +54,7 @@ export default function HoyScreen() {
   };
 
   const handlePlusPress = () => {
-    if (newTaskText.trim()) {
-      handleQuickAdd();
-    } else {
-      setAddModalVisible(true);
-    }
+    setAddModalVisible(true);
   };
 
   const handleAddTaskSubmit = async (data: AddTaskData) => {
@@ -143,92 +154,100 @@ export default function HoyScreen() {
         </Text>
       </View>
 
-      {/* Tasks List */}
-      {activeTasks.length === 0 ? (
-        <View className="flex-1 justify-center items-center">
-          <Text
-            className="text-gray-400 text-base"
-            style={{ fontFamily: "MomoTrustSans-Regular" }}
-          >
-            No hay tareas para hoy
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={activeTasks}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              className="flex-row items-center py-3 border-b border-gray-800"
-              onPress={() => handleToggleTask(item.id, item.done)}
-              activeOpacity={0.7}
+      <View className="flex-1">
+        {/* Tasks List */}
+        {activeTasks.length === 0 ? (
+          <View className="flex-1 justify-center items-center">
+            <Text
+              className="text-gray-400 text-base"
+              style={{ fontFamily: "MomoTrustSans-Regular" }}
             >
-              <View
-                className={`w-6 h-6 rounded-full border-2 border-purple-400 mr-3 justify-center items-center ${
-                  item.done ? "bg-purple-500" : ""
-                }`}
+              No hay tareas para hoy
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={activeTasks}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                className="flex-row items-center py-3 border-b border-gray-800"
+                onPress={() => handleToggleTask(item.id, item.done)}
+                activeOpacity={0.7}
               >
-                {item.done && (
-                  <FontAwesomeIcon icon={faCheck} size={12} color="#fff" />
-                )}
-              </View>
-              <View className="flex-1">
-                <Text
-                  className={`text-sm text-gray-100 mb-1 ${item.done ? "line-through text-gray-500" : ""}`}
-                  style={{ fontFamily: "MomoTrustSans-Medium" }}
+                <View
+                  className={`w-6 h-6 rounded-full border-2 border-purple-400 mr-3 justify-center items-center ${
+                    item.done ? "bg-purple-500" : ""
+                  }`}
                 >
-                  {item.title}
-                </Text>
-                <View className="flex-row items-center gap-2">
-                  {item.category && (
-                    <View
-                      className="px-2 py-0.5 rounded"
-                      style={{
-                        backgroundColor:
-                          CATEGORY_COLORS[item.category] || "#9184d9",
-                      }}
-                    >
-                      <Text
-                        className="text-[11px] text-white"
-                        style={{ fontFamily: "MomoTrustSans-Medium" }}
-                      >
-                        {item.category}
-                      </Text>
-                    </View>
-                  )}
-                  {item.time && (
-                    <Text
-                      className="text-[11px] text-gray-400"
-                      style={{ fontFamily: "MomoTrustSans-Regular" }}
-                    >
-                      {item.time}
-                    </Text>
+                  {item.done && (
+                    <FontAwesomeIcon icon={faCheck} size={12} color="#fff" />
                   )}
                 </View>
-              </View>
-            </TouchableOpacity>
-          )}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 12 }}
-        />
-      )}
+                <View className="flex-1">
+                  <Text
+                    className={`text-sm text-gray-100 mb-1 ${item.done ? "line-through text-gray-500" : ""}`}
+                    style={{ fontFamily: "MomoTrustSans-Medium" }}
+                  >
+                    {item.title}
+                  </Text>
+                  <View className="flex-row items-center gap-2">
+                    {item.category && (
+                      <View
+                        className="px-2 py-0.5 rounded"
+                        style={{
+                          backgroundColor:
+                            CATEGORY_COLORS[item.category] || "#9184d9",
+                        }}
+                      >
+                        <Text
+                          className="text-[11px] text-white"
+                          style={{ fontFamily: "MomoTrustSans-Medium" }}
+                        >
+                          {item.category}
+                        </Text>
+                      </View>
+                    )}
+                    {item.time && (
+                      <Text
+                        className="text-[11px] text-gray-400"
+                        style={{ fontFamily: "MomoTrustSans-Regular" }}
+                      >
+                        {item.time}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              </TouchableOpacity>
+            )}
+            contentContainerStyle={{
+              paddingHorizontal: 20,
+              paddingVertical: 12,
+            }}
+          />
+        )}
 
-      {/* Add Task Input */}
-      <View className="flex-row px-5 py-3 border-t border-gray-700 gap-2">
-        <TextInput
-          className="flex-1 bg-slate-800 rounded-lg px-3 py-2.5 text-gray-100 text-sm border border-gray-700"
-          placeholder="Agrega una nueva tarea..."
-          placeholderTextColor="#666"
-          value={newTaskText}
-          onChangeText={setNewTaskText}
-          onSubmitEditing={handleQuickAdd}
-          style={{ fontFamily: "MomoTrustSans-Regular" }}
-        />
-        <TouchableOpacity
-          className="w-10 h-10 rounded-full bg-purple-500 justify-center items-center"
-          onPress={handlePlusPress}
+        {/* Add Task Input */}
+        <View
+          className="flex-row px-5 py-3 border-t border-gray-700 gap-2"
+          style={{ marginBottom: keyboardHeight }}
         >
-          <FontAwesomeIcon icon={faPlus} size={16} color="#fff" />
-        </TouchableOpacity>
+          <TextInput
+            className="flex-1 bg-slate-800 rounded-lg px-3 py-2.5 text-gray-100 text-sm border border-gray-700"
+            placeholder="Agrega una nueva tarea..."
+            placeholderTextColor="#666"
+            value={newTaskText}
+            onChangeText={setNewTaskText}
+            onSubmitEditing={handleQuickAdd}
+            style={{ fontFamily: "MomoTrustSans-Regular" }}
+          />
+          <TouchableOpacity
+            className="w-10 h-10 rounded-full bg-purple-500 justify-center items-center"
+            onPress={handlePlusPress}
+          >
+            <FontAwesomeIcon icon={faPlus} size={16} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ConfirmModal
