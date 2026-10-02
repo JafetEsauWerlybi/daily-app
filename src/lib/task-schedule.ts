@@ -46,6 +46,65 @@ export function getWeekDays(date: Date): Date[] {
   );
 }
 
+export function addDays(date: Date, days: number): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+}
+
+export interface MonthCell {
+  date: Date;
+  inMonth: boolean;
+}
+
+// Semanas completas (lunes primero) que cubren el mes: 4 a 6 filas. Solo se
+// incluyen los días vecinos necesarios para completar la primera y última semana.
+export function getMonthGrid(year: number, month: number): MonthCell[] {
+  const first = new Date(year, month, 1);
+  const offset = repeatIndex(first);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const weeks = Math.ceil((offset + daysInMonth) / 7);
+  const start = addDays(first, -offset);
+  return Array.from({ length: weeks * 7 }, (_, i) => {
+    const date = addDays(start, i);
+    return { date, inMonth: date.getMonth() === month };
+  });
+}
+
+// Cantidad de tareas distintas con al menos una ocurrencia en el mes.
+export function countTasksInMonth(
+  tasks: Task[],
+  year: number,
+  month: number,
+): number {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  return tasks.filter((task) => {
+    for (let d = 1; d <= daysInMonth; d++) {
+      if (isTaskForDate(task, new Date(year, month, d))) return true;
+    }
+    return false;
+  }).length;
+}
+
+export interface DayCounts {
+  total: number;
+  done: number;
+}
+
+export function countDay(
+  tasks: Task[],
+  date: Date,
+  isCompleted: (taskId: string, day: string) => boolean,
+): DayCounts {
+  const day = toDateStr(date);
+  let total = 0;
+  let done = 0;
+  for (const task of tasks) {
+    if (!isTaskForDate(task, date)) continue;
+    total++;
+    if (isCompleted(task.id, day)) done++;
+  }
+  return { total, done };
+}
+
 export function getOccurrenceStatus(
   completed: boolean,
   day: string,

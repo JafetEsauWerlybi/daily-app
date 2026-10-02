@@ -38,7 +38,7 @@ npm start
 
 - [x] **Hoy tab**: Toggle de tareas, modal de crear tarea
 - [x] **Tablero tab**: semana en curso con secciones plegables por día y logs de cumplimiento (reemplaza los filtros Activas/Futuras/Recién completadas)
-- [ ] **Calendario tab**: Vistas semana/mes/año, seleccionar días
+- [x] **Calendario tab**: Vistas semana/mes/año, seleccionar días, indicadores por día y lista del día
 - [ ] **Perfil tab**: Subpantallas (Notificaciones, Apariencia, Cuenta, etc.)
 - [ ] Notificaciones push (Firebase Cloud Messaging)
 - [ ] Sincronización de datos en tiempo real (ya está con Firestore)

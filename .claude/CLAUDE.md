@@ -150,6 +150,20 @@ Se usa `@quidone/react-native-wheel-picker` (`DatePicker` para fecha, `WheelPick
 
 **No repetir:** no volver a poner `done` en `Task`; no escribir logs de "no completada" para días pasados (se derivan); no cambiar los días/vigencia de una tarea sin considerar que el historial pasado se recalcula (el estado `missed` depende del calendario actual de la tarea).
 
+### 9. **Calendario (Semana / Mes / Año)**
+**Estructura:** `calendario.tsx` orquesta; los componentes viven en `src/components/calendar/` (`CalendarModeSwitch`, `WeekStrip`, `MonthGrid`, `YearGrid`, `DayCell`, `DayTaskList`). Reusa `isTaskForDate`, `useTasks`, `useTaskLogs`, `TaskRow` y `TaskDetailsModal` (sección 8). Los nombres de meses/días están en `src/constants/dates.ts` (Tablero aún tiene su propia copia).
+- **Estado:** `mode`, `anchor` (fecha que define el periodo visible) y `selectedDay`. **Siempre abre en Semana con hoy seleccionado.** Botón "Hoy" aparece al alejarse.
+- **Navegación:** flechas ±1 semana/mes/año. En Mes, deslizar a los lados cambia de mes (`PanResponder` de RN, sin librerías; solo toma el gesto si es claramente horizontal). Tocar el nombre del mes abre Año; tocar una tarjeta de Año abre ese Mes. Tocar un día de un mes vecino lo selecciona y navega a ese mes.
+- **Mes:** `getMonthGrid` devuelve solo las semanas necesarias (4–6 filas, lunes primero) con días vecinos atenuados — **no** una cuadrícula fija de 6 filas (se recortó para no mostrar semanas de más del mes siguiente). La altura cambia entre meses.
+- **Indicadores por día** (`DayCell`): pasado y hoy → punto rojo + nº sin completar y punto verde + nº completadas; futuro → un punto azul + nº de tareas. No se dibuja un punto con conteo 0. Colores suaves (`#e58b8b`, `#7fcf9f`, `#7ba7ee`).
+- **Selección:** el día seleccionado pinta de morado todo el contenedor de la fecha (número y conteos dentro); hoy no seleccionado se marca con el número en morado. Las celdas no llevan borde.
+- **Logs:** Semana/Mes se suscriben al rango visible (primer→último día mostrado); Año solo cuenta tareas (`countTasksInMonth`) y no necesita logs.
+- **Lista del día:** mismas reglas que Tablero (pasado solo lectura; hoy y futuro editables).
+
+**No repetir (estilos):**
+- **No usar clases arbitrarias de NativeWind para tamaño de fuente** (`text-[7px]`, `text-[5px]`…): no se aplican y el texto sale al tamaño por defecto. Usar `style={{ fontSize }}` (con `lineHeight`) como en `COUNT_FONT_SIZE` de `DayCell.tsx`. Los valores arbitrarios de espaciado sí funcionaron (`py-[19px]`).
+- **No poner `flex-1` en el contenedor interno de una celda de alto automático:** su alto base pasa a 0, queda en el `minHeight` y el contenido (los conteos) se sale del fondo de color. Dejar que el contenedor mida lo que mide su contenido.
+
 ---
 
 ## 🎨 Estilos & Tipografía (HOMOLOGACIÓN REQUERIDA)
@@ -266,7 +280,7 @@ src/
 │   │   ├── _layout.tsx          (Tabs navigator + tab bar styling)
 │   │   ├── hoy.tsx              (Today tasks - con useBackHandler)
 │   │   ├── tablero.tsx          (Semana en curso lun→dom, secciones plegables por día, botón sync, con useBackHandler)
-│   │   ├── calendario.tsx       (Calendar - placeholder, con useBackHandler)
+│   │   ├── calendario.tsx       (Semana/Mes/Año con indicadores por día y lista del día, con useBackHandler)
 │   │   └── perfil.tsx           (Profile + logout, con useBackHandler)
 │   ├── auth/
 │   │   ├── _layout.tsx          (Auth stack navigator)
@@ -279,10 +293,12 @@ src/
 │   ├── LoadingScreen.tsx
 │   ├── AddTaskModal.tsx         (Overlay View + wheel pickers, ver sección "Add Task Modal")
 │   ├── TaskDetailsModal.tsx     (Detalle de solo lectura de una ocurrencia; mismo patrón de overlay)
-│   ├── TaskRow.tsx              (Fila compartida Hoy/Tablero: círculo + título + chips; estados completed/pending/missed)
+│   ├── TaskRow.tsx              (Fila compartida Hoy/Tablero/Calendario: círculo + título + chips; estados completed/pending/missed)
+│   ├── calendar/                (CalendarModeSwitch, WeekStrip, MonthGrid, YearGrid, DayCell, DayTaskList)
 │   └── [otros componentes...]
 ├── constants/
-│   └── categories.ts            (TASK_CATEGORIES, CATEGORY_COLORS — compartido entre Hoy y AddTaskModal)
+│   ├── categories.ts            (TASK_CATEGORIES, CATEGORY_COLORS — compartido entre Hoy y AddTaskModal)
+│   └── dates.ts                 (MONTHS, DAY_NAMES, WEEKDAY_LETTERS — lunes primero)
 ├── contexts/
 │   ├── auth-context.tsx         (onAuthStateChanged, login, register, logout)
 │   ├── loading-context.tsx      (Global spinner overlay)
@@ -294,7 +310,7 @@ src/
 │   └── [otros hooks...]
 ├── lib/
 │   ├── firebase.ts              (initializeAuth con AsyncStorage)
-│   └── task-schedule.ts         (isTaskForDate, getWeekDays, getOccurrenceStatus, logId, toDateStr)
+│   └── task-schedule.ts         (isTaskForDate, getWeekDays, getMonthGrid, countDay, countTasksInMonth, addDays, getOccurrenceStatus, logId, toDateStr)
 ├── types/
 │   └── task.ts                  (Task, TaskLog, OccurrenceStatus)
 ├── global.css                   (Tailwind imports)
@@ -388,7 +404,7 @@ module.exports = withNativeWind(config, { input: './src/global.css' });
 1. **Validación de fechas del Add Task Modal** — ya se guarda en Firestore, pero nada impide Fin < Inicio (con repetición la tarea nunca aparecería)
 2. **Verificar en dispositivo real** — los fixes de performance/timezone del Add Task Modal (`T00:00:00`, precalentamiento de `Intl`) y todo lo de Hoy/Tablero/logs se validó por lectura de código + `tsc`, no en el Samsung A15 físico
 3. **Mostrar errores de Firestore en UI** — `use-tasks` y `use-task-logs` guardan `error` pero ninguna pantalla lo muestra
-4. **Implementar Calendario** — Vista semanal/mensual/anual
+4. **Unificar `MONTHS`/`DAY_NAMES`** — Tablero y Hoy aún tienen su propia copia; usar `src/constants/dates.ts`
 5. **Implementar Profile sub-screens** — Notificaciones, Apariencia, Cuenta, Privacidad, Ayuda
 6. **OAuth Google & Apple** — Botones de login ya existen, falta integración
 7. **Programar notificación local real** para la hora seleccionada en Add Task (hoy solo se guarda el campo `time`, no se agenda con `expo-notifications`)
@@ -441,9 +457,13 @@ npx tsc --noEmit
 ✅ Tablero: semana en curso (lunes→domingo) con secciones plegables por día (hoy y futuros abiertos, pasados cerrados), botón de sincronizar, días pasados de solo lectura
 ✅ Modelo nuevo de cumplimiento: logs por tarea+día (ver sección 8); la tarea ya no tiene `done`/`completedAt`
 
-**Pendiente inmediato:** nada de esto se probó aún en el Samsung A15 físico. Faltan las **reglas de Firestore** para `users/{uid}/taskLogs` (sin ellas puede fallar al guardar; el error solo queda en `error` del hook, no se muestra en UI) y validar Fin ≥ Inicio en el modal.
+✅ Calendario: Semana / Mes / Año con indicadores por día (rojo/verde en pasado y hoy, azul en futuro), selección con contenedor morado, deslizar para cambiar de mes, tocar el mes para ver el año, lista del día con las reglas de Tablero (ver sección 9)
+✅ Ajustes de estilo del Calendario hechos con feedback en dispositivo: celdas sin borde, más espacio entre fechas, mes con solo las semanas necesarias, año con tarjetas que llenan el alto
+✅ Bugs encontrados: `text-[Npx]` no aplica el tamaño de fuente y `flex-1` en el contenedor interno de la celda dejaba los conteos fuera del fondo (ambos en "No repetir" de la sección 9)
 
-**Próxima sesión:** probar en dispositivo real, publicar reglas de Firestore, luego Calendario.
+**Pendiente inmediato:** las **reglas de Firestore** para `users/{uid}/taskLogs` (sin ellas puede fallar al guardar; el error solo queda en `error` del hook, no se muestra en UI) y validar Fin ≥ Inicio en el modal. El Calendario sí se ha ido viendo en el celular durante los ajustes de estilo, pero el guardado/lectura de logs y los fixes anteriores del modal siguen sin confirmarse en el Samsung A15.
+
+**Próxima sesión:** publicar reglas de Firestore, validar fechas del modal, luego Perfil (sub-pantallas) y notificaciones locales.
 
 ---
 
