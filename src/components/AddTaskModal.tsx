@@ -32,6 +32,24 @@ function toDateStr(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+const DEFAULT_NOTIFY_TIME = "08:00";
+
+// Vigencia por defecto: de hoy a un año después.
+function defaultRange(): { start: string; end: string } {
+  const now = new Date();
+  return {
+    start: toDateStr(now),
+    end: toDateStr(
+      new Date(now.getFullYear() + 1, now.getMonth(), now.getDate()),
+    ),
+  };
+}
+
+// repeatDays usa 0=Lunes..6=Domingo; Date.getDay() usa 0=Domingo.
+function todayIndex(): number {
+  return (new Date().getDay() + 6) % 7;
+}
+
 function parseTimeStr(str: string): { hour: number; minute: number } {
   const [h, m] = str.split(":").map(Number);
   return {
@@ -103,14 +121,15 @@ export function AddTaskModal({
 
   const [title, setTitle] = useState(initialTitle);
   const [category, setCategory] = useState<TaskCategory>("Personal");
-  const [dateStart, setDateStart] = useState("");
-  const [dateEnd, setDateEnd] = useState("");
+  const [dateStart, setDateStart] = useState(() => defaultRange().start);
+  const [dateEnd, setDateEnd] = useState(() => defaultRange().end);
   const [time, setTime] = useState("");
-  const [repeatDays, setRepeatDays] = useState<number[]>([]);
+  const [repeatDays, setRepeatDays] = useState<number[]>(() => [todayIndex()]);
   const [activeDatePicker, setActiveDatePicker] = useState<
     "start" | "end" | null
   >(null);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [notify, setNotify] = useState(false);
   const [mounted, setMounted] = useState(visible);
   const [dateEverOpened, setDateEverOpened] = useState(false);
   const [timeEverOpened, setTimeEverOpened] = useState(false);
@@ -124,6 +143,11 @@ export function AddTaskModal({
     if (visible) {
       setMounted(true);
       setTitle(initialTitle);
+      // "Hoy" puede haber cambiado si la app estuvo abierta de un día a otro.
+      const range = defaultRange();
+      setDateStart(range.start);
+      setDateEnd(range.end);
+      setRepeatDays([todayIndex()]);
       Animated.parallel([
         Animated.spring(translateY, {
           toValue: 0,
@@ -164,12 +188,14 @@ export function AddTaskModal({
   const resetForm = () => {
     setTitle("");
     setCategory("Personal");
-    setDateStart("");
-    setDateEnd("");
+    const range = defaultRange();
+    setDateStart(range.start);
+    setDateEnd(range.end);
     setTime("");
-    setRepeatDays([]);
+    setRepeatDays([todayIndex()]);
     setActiveDatePicker(null);
     setShowTimePicker(false);
+    setNotify(false);
     setDateEverOpened(false);
     setTimeEverOpened(false);
     dateFade.setValue(0);
@@ -203,20 +229,34 @@ export function AddTaskModal({
     });
   };
 
+  const revealTimePicker = () => {
+    setShowTimePicker(true);
+    if (!timeEverOpened) {
+      setTimeEverOpened(true);
+      timeFade.setValue(0);
+      Animated.timing(timeFade, {
+        toValue: 1,
+        duration: 180,
+        useNativeDriver: true,
+      }).start();
+    }
+  };
+
   const toggleTimePicker = () => {
-    setShowTimePicker((prev) => {
-      const next = !prev;
-      if (next && !timeEverOpened) {
-        setTimeEverOpened(true);
-        timeFade.setValue(0);
-        Animated.timing(timeFade, {
-          toValue: 1,
-          duration: 180,
-          useNativeDriver: true,
-        }).start();
-      }
-      return next;
-    });
+    if (showTimePicker) setShowTimePicker(false);
+    else revealTimePicker();
+  };
+
+  const toggleNotify = () => {
+    if (notify) {
+      setNotify(false);
+      setShowTimePicker(false);
+      setTime("");
+      return;
+    }
+    setNotify(true);
+    if (!time) setTime(DEFAULT_NOTIFY_TIME);
+    revealTimePicker();
   };
 
   const setHour = (hour: number) => {
@@ -236,23 +276,15 @@ export function AddTaskModal({
   };
 
   const handleSave = () => {
-    if (!title.trim()) return;
-    console.log({
+    if (!title.trim() || repeatDays.length === 0) return;
+    onSubmit({
       title: title.trim(),
       category,
-      time: time || undefined,
+      time: notify && time ? time : undefined,
       dateStart: dateStart || undefined,
       dateEnd: dateEnd || undefined,
       repeatDays: repeatDays.length > 0 ? repeatDays : undefined,
     });
-    // onSubmit({
-    //   title: title.trim(),
-    //   category,
-    //   time: time || undefined,
-    //   dateStart: dateStart || undefined,
-    //   dateEnd: dateEnd || undefined,
-    //   repeatDays: repeatDays.length > 0 ? repeatDays : undefined,
-    // });
     resetForm();
     onClose();
   };
@@ -418,32 +450,62 @@ export function AddTaskModal({
               )}
             </View>
 
-            {/* Hora de notificación */}
-            <Text
-              className="text-sm text-gray-300 mb-2"
-              style={{ fontFamily: "MomoTrustSans-Medium" }}
-            >
-              Hora de notificación
-            </Text>
-            <TouchableOpacity
-              className={`bg-slate-800 border rounded-lg px-3 py-2.5 mb-2 ${
-                showTimePicker ? "border-purple-400" : "border-gray-700"
-              }`}
-              onPress={toggleTimePicker}
-            >
+            {/* Notificación */}
+            <View className="flex-row items-center justify-between mb-2">
               <Text
-                className={
-                  time ? "text-sm text-gray-100" : "text-sm text-gray-500"
-                }
-                style={{ fontFamily: "MomoTrustSans-Regular" }}
+                className="text-sm text-gray-300"
+                style={{ fontFamily: "MomoTrustSans-Medium" }}
               >
-                {time || "Sin recordatorio"}
+                ¿Quieres notificación?
               </Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-row items-center gap-2"
+                onPress={toggleNotify}
+              >
+                <View
+                  className={`w-4 h-4 rounded border-2 justify-center items-center ${
+                    notify
+                      ? "bg-purple-500 border-purple-500"
+                      : "border-gray-600"
+                  }`}
+                >
+                  {notify && (
+                    <Text
+                      className="text-white text-[10px]"
+                      style={{ fontFamily: "MomoTrustSans-Bold" }}
+                    >
+                      ✓
+                    </Text>
+                  )}
+                </View>
+                <Text
+                  className="text-xs text-gray-400"
+                  style={{ fontFamily: "MomoTrustSans-Regular" }}
+                >
+                  Sí
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {notify && (
+              <TouchableOpacity
+                className={`bg-slate-800 border rounded-lg px-3 py-2.5 mb-2 ${
+                  showTimePicker ? "border-purple-400" : "border-gray-700"
+                }`}
+                onPress={toggleTimePicker}
+              >
+                <Text
+                  className="text-sm text-gray-100"
+                  style={{ fontFamily: "MomoTrustSans-Regular" }}
+                >
+                  {time}
+                </Text>
+              </TouchableOpacity>
+            )}
 
             <View
               className="flex-row justify-center items-center bg-slate-800 border border-gray-700 rounded-lg py-0.5 mb-4"
-              style={{ display: showTimePicker ? "flex" : "none" }}
+              style={{ display: notify && showTimePicker ? "flex" : "none" }}
             >
               {!timeEverOpened ? (
                 <View style={{ height: PICKER_PLACEHOLDER_HEIGHT }} />
@@ -561,8 +623,11 @@ export function AddTaskModal({
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              className="flex-1 bg-purple-500 rounded-lg py-3 items-center"
+              className={`flex-1 bg-purple-500 rounded-lg py-3 items-center ${
+                repeatDays.length === 0 ? "opacity-40" : ""
+              }`}
               onPress={handleSave}
+              disabled={repeatDays.length === 0}
             >
               <Text
                 className="text-white text-sm"

@@ -36,8 +36,8 @@ npm start
 
 ### 4. Características por implementar
 
-- [ ] **Hoy tab**: Toggle de tareas, modal de crear tarea
-- [ ] **Tablero tab**: Filtros (Activas, Futuras, Recién completadas)
+- [x] **Hoy tab**: Toggle de tareas, modal de crear tarea
+- [x] **Tablero tab**: semana en curso con secciones plegables por día y logs de cumplimiento (reemplaza los filtros Activas/Futuras/Recién completadas)
 - [ ] **Calendario tab**: Vistas semana/mes/año, seleccionar días
 - [ ] **Perfil tab**: Subpantallas (Notificaciones, Apariencia, Cuenta, etc.)
 - [ ] Notificaciones push (Firebase Cloud Messaging)

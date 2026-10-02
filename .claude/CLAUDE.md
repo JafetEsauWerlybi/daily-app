@@ -18,7 +18,7 @@ FontAwesome: @fortawesome/react-native-fontawesome + @fortawesome/free-solid-svg
 AsyncStorage: @react-native-async-storage/async-storage 2.2.0 (para persistencia de auth)
 SafeAreaContext: react-native-safe-area-context (NO usar SafeAreaView de react-native)
 StatusBar: expo-status-bar (para manejo transparente de barra de estado)
-WheelPicker: @quidone/react-native-wheel-picker (JS puro, sin código nativo — usado para date/time pickers tipo rueda)
+WheelPicker: @quidone/react-native-wheel-picker (incluye código nativo opcional en el paquete, pero funciona sin rebuild nativo vía Expo Go — usado para date/time pickers tipo rueda)
 ```
 
 **NO instalados (probados y revertidos):** `@gorhom/bottom-sheet`, `@react-native-community/datetimepicker`. Ver sección "Problemas Resueltos" abajo antes de volver a intentarlos.
@@ -101,18 +101,54 @@ Esta línea es OBLIGATORIA al inicio del render para remover el componente compl
 - `showLoading()` antes de login, se auto-oculta cuando entra el usuario o falla
 - NO usar `router.replace()` (causa flash blanco); usar `router.navigate()`
 
-### 6. **Add Task Modal (CRÍTICO — no usar librerías de bottom-sheet)**
-**Problema:** Se intentó usar `@gorhom/bottom-sheet` (con `GestureHandlerRootView` + `BottomSheetModalProvider` en `_layout.tsx` raíz) para el modal de "Nueva tarea". Dos fallas:
+### 6. **Add Task Modal (CRÍTICO — no usar librerías de bottom-sheet, no usar `<Modal>` nativo)**
+**Problema 1:** Se intentó usar `@gorhom/bottom-sheet` (con `GestureHandlerRootView` + `BottomSheetModalProvider` en `_layout.tsx` raíz) para el modal de "Nueva tarea". Dos fallas:
 1. Conflicto de peer-deps: `react-native-reanimated@4.5.1` (el que realmente queda instalado) pide `react-native-worklets@0.10.x`, pero `@gorhom/bottom-sheet` + npm intentaban resolver `reanimated` a `4.6.0`, que pide `worklets@0.12.x` — y `expo-modules-core` (parte del propio SDK 57) exige `worklets@0.10.x`. No hay combinación que satisfaga a los tres a la vez sin `--legacy-peer-deps`.
 2. Aun instalando con `--legacy-peer-deps`, el `BottomSheetModal` no se hacía visible en Android (probado en Samsung A15) — ni con `enableDynamicSizing={false}` ni ajustando snapPoints.
 
-**Solución:** Modal nativo de React Native (`<Modal transparent animationType="none">`) + `Animated.Value` propio para el slide-up/fade, mismo patrón que `ConfirmModal.tsx`. Backdrop y sheet son **hermanos** (no padre/hijo) dentro de un `View` — el backdrop tiene su propio `TouchableWithoutFeedback onPress={handleClose}`, y el sheet NO está envuelto por ningún `Touchable`.
+**Solución 1:** Modal nativo de React Native (`<Modal transparent animationType="none">`) + `Animated.Value` propio para el slide-up/fade, mismo patrón que `ConfirmModal.tsx`. Backdrop y sheet como **hermanos** (no padre/hijo).
 
-**No repetir:** No envolver el contenido scrolleable del sheet (ni sus wheel pickers) dentro de un `TouchableWithoutFeedback` — la negociación de gesto de "tap" de ese componente compite con el gesto de scroll/drag de listas internas (`ScrollView`, wheel pickers) y las deja "pegadas" sin responder al arrastre.
+**Problema 2 (encontrado después, CRÍTICO):** El `<Modal>` nativo de React Native tardaba **~2 segundos en abrir** en Android (probado en Samsung A15). Causa: cada vez que `visible` pasa a `true`, `<Modal>` crea una ventana/Dialog nativa nueva (round-trip al hilo nativo) — ese costo de creación de ventana es independiente de qué tan liviano sea el contenido JS.
 
-**Wheel pickers (fecha/hora):** se usa `@quidone/react-native-wheel-picker` (`DatePicker` para fecha, `WheelPicker` para hora/minuto) — es JS puro, sin módulos nativos, así que no reintroduce el problema de peer-deps de `worklets`. Props clave para tamaño: `itemHeight` (alto de cada fila, default 48) y `visibleItemCount` (filas visibles, default 5) — en este proyecto se usan `PICKER_ITEM_HEIGHT = 34` y `PICKER_VISIBLE_ITEMS = 3` (declaradas en `AddTaskModal.tsx`) para que las ruedas no se vean sobredimensionadas.
+**Solución 2 (estado actual):** Se reemplazó `<Modal>` por una `View` absoluta (`position: absolute` cubriendo toda la pantalla, `zIndex`/`elevation` para quedar encima), controlada 100% en JS. Un estado `mounted` renderiza el overlay solo mientras está visible o animando su cierre (`Animated.parallel(...).start(() => setMounted(false))` al cerrar). Como ya no hay `onRequestClose` nativo, se agregó un `BackHandler.addEventListener('hardwareBackPress', ...)` manual (solo activo mientras `visible`) para seguir cerrando con el botón físico atrás.
+
+**No repetir (gestos):** No envolver el contenido scrolleable del sheet (ni sus wheel pickers) dentro de un `TouchableWithoutFeedback` — la negociación de gesto de "tap" de ese componente compite con el gesto de scroll/drag de listas internas (`ScrollView`, wheel pickers) y las deja "pegadas" sin responder al arrastre. Backdrop y sheet deben seguir siendo hermanos, cada uno con su propio `Touchable`/ausencia de él.
+
+**No repetir (`<Modal>` nativo):** No volver a usar `<Modal>` de `react-native` para este sheet — aunque sea más simple, el costo de apertura en Android lo hace inviable para una interacción tan frecuente como "agregar tarea".
+
+**Wheel pickers (fecha/hora) — 3 bugs adicionales encontrados y resueltos, todos en `AddTaskModal.tsx`:**
+Se usa `@quidone/react-native-wheel-picker` (`DatePicker` para fecha, `WheelPicker` para hora/minuto). El paquete incluye carpetas nativas (`android/ios/cpp`) pero funciona sin rebuild nativo en Expo Go. Props clave para tamaño: `itemHeight` (alto de cada fila, default 48) y `visibleItemCount` (filas visibles, default 5) — en este proyecto se usan `PICKER_ITEM_HEIGHT = 34` y `PICKER_VISIBLE_ITEMS = 3`.
+
+1. **Montaje anticipado = picker en gris sin datos.** Montar `DatePicker`/`WheelPicker` apenas abre el modal (antes de que el usuario toque el campo), dentro de un contenedor `display: "none"` (porque el campo aún no está activo), hace que el componente mida su layout con tamaño cero y nunca lo vuelve a recalcular cuando luego se muestra — queda congelado en gris sin texto. **Solución:** montar cada picker perezosamente, exactamente la primera vez que el usuario abre ese campo (`dateEverOpened` / `timeEverOpened`, seteados dentro de `openDatePicker`/`toggleTimePicker`), en el mismo render en que el contenedor pasa a `display: "flex"`. Una vez montado, queda montado (no se desmonta en cada toggle posterior, solo se oculta/muestra con `display`), para no reintroducir el problema de remount-por-toggle (ver punto 2).
+2. **Remontar en cada toggle = lento.** Si en cambio se usa render condicional (`{activo && <DatePicker/>}`) que desmonta/remonta el picker cada vez que el usuario cierra y reabre el campo, cada montaje repite el trabajo costoso del punto 3 (Intl). **Solución:** una vez `dateEverOpened`/`timeEverOpened` es `true`, no vuelve a `false` hasta `resetForm()` — el componente persiste montado y solo cambia de visible a oculto vía `style={{ display }}`.
+3. **`Intl.DateTimeFormat('es-MX', ...)` lento en Hermes.** La librería construye ~12 instancias de `Intl.DateTimeFormat` (nombres de mes) cada vez que `DatePicker` monta por primera vez en la sesión. La primera construcción de un formatter con un locale no-inglés es muy lenta en Hermes (carga de datos ICU bajo demanda) — varios segundos. **Mitigación:** se agregó un `useEffect` en `AddTaskModal` que, 400ms después de montar el modal (antes de que el usuario toque nada), precalienta ese mismo `Intl.DateTimeFormat('es-MX', ...)` en segundo plano, para que el costo ya esté pagado cuando el usuario sí abre el picker. No elimina el costo, solo lo mueve fuera del camino crítico.
+4. **Corrimiento de un día al cambiar mes/año (bug de zona horaria).** La librería hace `new Date(date)` internamente (`DatePickerValueProvider.tsx`) sobre el string `"YYYY-MM-DD"` que le pasamos. JS parsea un string de fecha-sola ISO como **medianoche UTC**; al convertir a hora local en una zona horaria negativa (México, UTC-6) el día se recorre uno hacia atrás, y la librería lo compara mal al recalcular tras mover el wheel de mes/año. **Solución:** se le pasa `` `${dateStr}T00:00:00` `` (con hora, sin offset) en vez del string pelado — una fecha-hora sin zona horaria SÍ se interpreta como hora local por el estándar ECMA-262, a diferencia de una fecha sola. **No repetir:** NO usar el truco de reemplazar `-` por `/` (`"YYYY/MM/DD"`) para forzar hora local — es un formato no estándar que Hermes parsea como `Invalid Date` (a diferencia de V8/Node, donde sí funciona), y ese `NaN` termina usándose para construir un array interno de la librería, causando `RangeError: invalid array length`. El sufijo `T00:00:00` es la única forma probada que funciona en Hermes.
+
+**Botón "+" en Hoy:** ya no hace quick-add directo cuando el input tiene texto — siempre abre este modal (con el título precargado desde el input de quick-add). El quick-add directo sigue existiendo, pero solo vía Enter (`onSubmitEditing`) en el input de `hoy.tsx`.
 
 **Scroll del contenido:** el modal completo puede exceder la pantalla al abrir un wheel picker. Se envuelve el bloque de campos (Título → Días) en un `ScrollView` normal (sin librería), dejando el handle+título fijos arriba y los botones Cancelar/Guardar fijos abajo (fuera del `ScrollView`). El `ScrollView` interno de los wheel pickers de `@quidone` convive bien anidado dentro de este `ScrollView` exterior (ambos son `ScrollView` nativos estándar, no hay competencia de `Touchable` de por medio).
+
+### 7. **Teclado tapa el input de "Agregar tarea" en Android (Expo Go)**
+**Problema:** En `hoy.tsx`, al enfocar el `TextInput` de "Agrega una nueva tarea...", el teclado tapaba el input y el botón `+`, sin reajustar el layout.
+
+**Por qué `KeyboardAvoidingView` no sirvió:** `KeyboardAvoidingView` depende de que Android redimensione la ventana nativa (`windowSoftInputMode` del manifiesto). Ese ajuste es configuración nativa — en Expo Go corres dentro del host de Expo, así que el manifiesto de la app nunca se aplica, y `KeyboardAvoidingView` queda sin efecto.
+
+**Solución:** listener manual de teclado en `hoy.tsx` — `Keyboard.addListener('keyboardDidShow'/'keyboardDidHide', ...)` guarda la altura del teclado en estado (`keyboardHeight`), aplicada como `style={{ marginBottom: keyboardHeight }}` en la barra de input. Esto es JS puro, no depende de configuración nativa, y funciona igual en Expo Go que en un build nativo.
+
+**No repetir:** No asumir que `KeyboardAvoidingView` funcionará solo porque es la API "oficial" de RN para esto — en Expo Go, cualquier solución que dependa de `windowSoftInputMode`/manifiesto nativo no tiene efecto.
+
+### 8. **Ocurrencias de tareas y logs de cumplimiento (Hoy / Tablero)**
+**Problema:** un solo `done` en la tarea no sirve para tareas que se repiten (se queda marcada de una semana a otra).
+
+**Solución:**
+- `Task` ya **no** tiene `done`/`completedAt`. Cada realización es un log en Firestore `users/{uid}/taskLogs/{taskId}_{YYYY-MM-DD}` (id determinista = un doc por tarea y día) con `{taskId, date, completed, completedAt, updatedAt}`. Marcar escribe `completed: true`; desmarcar, `completed: false`. Se consulta solo por rango de `date` (un campo → sin índice compuesto; por eso es subcolección bajo `users/{uid}` y no colección raíz con `userId`).
+- **Cuándo cae una tarea en un día** (`isTaskForDate` en `src/lib/task-schedule.ts`): con `repeatDays` → días dentro de `dateStart..dateEnd` cuyo weekday (0=Lun..6=Dom) esté en `repeatDays`; sin `repeatDays` → solo `dateStart` (tarea individual; el quick-add de Hoy usa `dateStart` = hoy). Tareas viejas sin `dateStart` usan el día de `createdAt` si ya es conocido.
+- **Estado de una ocurrencia** (`getOccurrenceStatus`): `completed` (log con `completed: true`), `pending` (hoy/futuro sin log), `missed` (día pasado sin log). **"No completada" se calcula, no se guarda** — no hay procesos ni Cloud Functions que escriban días perdidos.
+- **Días pasados son de solo lectura**: hoy y días futuros sí se pueden marcar/desmarcar.
+- Add Task Modal: vigencia por defecto hoy → +1 año, día de hoy preseleccionado y "Guardar" deshabilitado sin días; hora de notificación por defecto 08:00 solo si se marca "¿Quieres notificación?".
+- Botón de sincronizar (Tablero): `refresh()` de `use-tasks` y `use-task-logs` re-suscribe los `onSnapshot` (Firestore ya es en tiempo real; el botón solo fuerza re-lectura).
+
+**No repetir:** no volver a poner `done` en `Task`; no escribir logs de "no completada" para días pasados (se derivan); no cambiar los días/vigencia de una tarea sin considerar que el historial pasado se recalcula (el estado `missed` depende del calendario actual de la tarea).
 
 ---
 
@@ -214,7 +250,8 @@ import { faListCheck, faTableCellsLarge, faCalendarDays, faUser } from '@fortawe
 ### Componentes Reutilizables
 - **ConfirmModal** (`src/components/ConfirmModal.tsx`): Modal personalizado con animación, sin usar Alert nativo
 - **LoadingScreen** (`src/components/LoadingScreen.tsx`): Spinner animado + "Cargando..." pulsante
-- **AddTaskModal** (`src/components/AddTaskModal.tsx`): Modal nativo (mismo patrón que ConfirmModal) con `ScrollView` interno y wheel pickers de `@quidone/react-native-wheel-picker` para fecha/hora. Ver sección "Add Task Modal (CRÍTICO)" arriba.
+- **AddTaskModal** (`src/components/AddTaskModal.tsx`): overlay `View` absoluta (no `<Modal>` nativo, ver sección "Add Task Modal (CRÍTICO)") con `ScrollView` interno y wheel pickers de `@quidone/react-native-wheel-picker` para fecha/hora, montados perezosamente por campo.
+- **TaskRow** (`src/components/TaskRow.tsx`) y **TaskDetailsModal** (`src/components/TaskDetailsModal.tsx`): fila y detalle compartidos por Hoy y Tablero.
 
 ---
 
@@ -228,7 +265,7 @@ src/
 │   ├── (tabs)/
 │   │   ├── _layout.tsx          (Tabs navigator + tab bar styling)
 │   │   ├── hoy.tsx              (Today tasks - con useBackHandler)
-│   │   ├── tablero.tsx          (Board - placeholder, con useBackHandler)
+│   │   ├── tablero.tsx          (Semana en curso lun→dom, secciones plegables por día, botón sync, con useBackHandler)
 │   │   ├── calendario.tsx       (Calendar - placeholder, con useBackHandler)
 │   │   └── perfil.tsx           (Profile + logout, con useBackHandler)
 │   ├── auth/
@@ -240,7 +277,9 @@ src/
 ├── components/
 │   ├── ConfirmModal.tsx
 │   ├── LoadingScreen.tsx
-│   ├── AddTaskModal.tsx         (Modal nativo + wheel pickers, ver sección "Add Task Modal")
+│   ├── AddTaskModal.tsx         (Overlay View + wheel pickers, ver sección "Add Task Modal")
+│   ├── TaskDetailsModal.tsx     (Detalle de solo lectura de una ocurrencia; mismo patrón de overlay)
+│   ├── TaskRow.tsx              (Fila compartida Hoy/Tablero: círculo + título + chips; estados completed/pending/missed)
 │   └── [otros componentes...]
 ├── constants/
 │   └── categories.ts            (TASK_CATEGORIES, CATEGORY_COLORS — compartido entre Hoy y AddTaskModal)
@@ -250,12 +289,14 @@ src/
 │   └── navigation-history-context.tsx  (Historial de tabs)
 ├── hooks/
 │   ├── use-back-handler.ts      (useFocusEffect + BackHandler)
-│   ├── use-tasks.ts             (Firestore real-time tasks, incluye addTask)
+│   ├── use-tasks.ts             (Firestore real-time tasks, addTask/deleteTask, refresh/syncing)
+│   ├── use-task-logs.ts         (Logs de cumplimiento por rango de fechas: isCompleted/setCompleted/refresh)
 │   └── [otros hooks...]
 ├── lib/
-│   └── firebase.ts              (initializeAuth con AsyncStorage)
+│   ├── firebase.ts              (initializeAuth con AsyncStorage)
+│   └── task-schedule.ts         (isTaskForDate, getWeekDays, getOccurrenceStatus, logId, toDateStr)
 ├── types/
-│   └── task.ts                  (Task interface)
+│   └── task.ts                  (Task, TaskLog, OccurrenceStatus)
 ├── global.css                   (Tailwind imports)
 └── [config files...]
 ```
@@ -319,6 +360,13 @@ module.exports = withNativeWind(config, { input: './src/global.css' });
 | Navigator.replace() flash blanco | Reemplazo inmediato de stack | Usar router.navigate() | Prefer navigate over replace |
 | `@gorhom/bottom-sheet` no visible en Android + conflicto worklets | Peer-dep de reanimated/worklets sin resolución única + sheet no renderiza en Android | Modal nativo `<Modal>` + `Animated.Value` propio | No instalar librerías de bottom-sheet sin verificar antes en dispositivo real |
 | Wheel picker "pegado" (no gira) | `TouchableWithoutFeedback` envolvía todo el sheet, compitiendo por el gesto con el `ScrollView` interno del picker | Backdrop y sheet como hermanos, sheet sin `Touchable` envolvente | No envolver contenido con `ScrollView`/gestos dentro de un `TouchableWithoutFeedback` |
+| `<Modal>` nativo tarda ~2s en abrir (Android) | Cada apertura crea una ventana/Dialog nativa nueva | `View` absoluta (overlay JS) + `BackHandler` manual | No usar `<Modal>` de react-native para sheets de uso frecuente |
+| Wheel picker en gris sin datos tras un toggle | Picker montado mientras su contenedor tenía `display:"none"` → layout de tamaño 0 nunca recalculado | Montaje perezoso en el primer open de cada campo (`dateEverOpened`/`timeEverOpened`), nunca mientras está oculto | No montar componentes de lista/rueda dentro de un contenedor `display:"none"` |
+| Apertura de wheel picker lenta (varios segundos) | `Intl.DateTimeFormat('es-MX', ...)` lento en su primer uso en Hermes (ICU bajo demanda) | Precalentar el mismo `Intl.DateTimeFormat` en background 400ms después de abrir el modal | No asumir que `Intl` es barato la primera vez que se usa un locale no-inglés en Hermes |
+| Wheel de fecha resta un día al mover mes/año | La librería hace `new Date("YYYY-MM-DD")`, que JS parsea como UTC; se corre un día en zonas UTC-negativas | Pasar `` `${dateStr}T00:00:00` `` (fecha-hora sin zona = hora local por spec) | No usar el truco `"YYYY/MM/DD"` (slashes) — Hermes lo parsea como `Invalid Date` y rompe la librería con `RangeError` |
+| Teclado tapa el input de Hoy en Android | `KeyboardAvoidingView` depende de `windowSoftInputMode` nativo, que Expo Go no aplica | Listener manual `Keyboard.addListener` + `marginBottom` dinámico | No confiar en `KeyboardAvoidingView` dentro de Expo Go |
+| `addDoc` falla al guardar tareas con campos opcionales vacíos | Firestore rechaza valores `undefined` (`time`, fechas, `repeatDays` sin llenar) | `addTask` filtra las entradas `undefined` antes de `addDoc` | No pasar objetos con `undefined` a Firestore; omitir el campo |
+| Tarea semanal aparece en días que no son suyos / se queda marcada | Un solo `done` en la tarea no sirve para tareas repetitivas | Logs de cumplimiento por tarea+día (sección 8) | No volver a guardar `done`/`completedAt` en `Task` |
 
 ---
 
@@ -337,15 +385,16 @@ module.exports = withNativeWind(config, { input: './src/global.css' });
 
 ## 🚀 Próximos Pasos Pendientes
 
-1. **Validación de datos del Add Task Modal** — actualmente `handleSave` solo hace `console.log` (el `onSubmit` real está comentado en `AddTaskModal.tsx`), falta validar campos y reconectar a `addTask`
-2. **Implementar Tablero** — 3 checkboxes (filtro) + secciones de tareas por estado
-3. **Implementar Calendario** — Vista semanal/mensual/anual
-4. **Implementar Profile sub-screens** — Notificaciones, Apariencia, Cuenta, Privacidad, Ayuda
-5. **OAuth Google & Apple** — Botones de login ya existen, falta integración
-6. **Programar notificación local real** para la hora seleccionada en Add Task (hoy solo se guarda el campo `time`, no se agenda con `expo-notifications`)
-7. **Firebase Cloud Messaging** — Push notifications
-8. **Firestore Security Rules** — Publicar reglas de seguridad
-9. **Testing en dispositivos reales** — Verificar en Android + iOS físicos
+1. **Validación de fechas del Add Task Modal** — ya se guarda en Firestore, pero nada impide Fin < Inicio (con repetición la tarea nunca aparecería)
+2. **Verificar en dispositivo real** — los fixes de performance/timezone del Add Task Modal (`T00:00:00`, precalentamiento de `Intl`) y todo lo de Hoy/Tablero/logs se validó por lectura de código + `tsc`, no en el Samsung A15 físico
+3. **Mostrar errores de Firestore en UI** — `use-tasks` y `use-task-logs` guardan `error` pero ninguna pantalla lo muestra
+4. **Implementar Calendario** — Vista semanal/mensual/anual
+5. **Implementar Profile sub-screens** — Notificaciones, Apariencia, Cuenta, Privacidad, Ayuda
+6. **OAuth Google & Apple** — Botones de login ya existen, falta integración
+7. **Programar notificación local real** para la hora seleccionada en Add Task (hoy solo se guarda el campo `time`, no se agenda con `expo-notifications`)
+8. **Firebase Cloud Messaging** — Push notifications
+9. **Firestore Security Rules** — Publicar reglas de seguridad (incluir `users/{uid}/taskLogs`: lectura/escritura solo del dueño)
+10. **Testing en dispositivos reales** — Verificar en Android + iOS físicos
 
 ---
 
@@ -382,21 +431,22 @@ npx tsc --noEmit
 
 ---
 
-## 📌 Última Sesión: 2026-09-11
+## 📌 Última Sesión: 2026-10-02 (segunda parte)
 
-**Logros:**
-✅ Add Task Modal implementado (`src/components/AddTaskModal.tsx`) — Título, Etiqueta, Rango de fechas, Hora de notificación, Días de repetición + "Todos los días"
-✅ Wheel pickers de fecha/hora con `@quidone/react-native-wheel-picker` (JS puro, sin módulos nativos)
-✅ Probado y descartado `@gorhom/bottom-sheet` (conflicto de peer-deps + no visible en Android) — ver sección "Add Task Modal (CRÍTICO)"
-✅ Scroll interno del modal (ScrollView) con botones de acción fijos, sin romper el gesto de los wheel pickers
-✅ `src/constants/categories.ts` extraído para compartir colores/categorías entre Hoy y AddTaskModal
+**Logros (guardado de tareas, Hoy y Tablero semanal con logs de cumplimiento):**
+✅ Add Task Modal: checkbox "¿Quieres notificación?" — el wheel de hora solo aparece (y `time` solo se guarda) si está marcado; hora por defecto 08:00
+✅ Add Task Modal: `onSubmit` descomentado y conectado a Firestore (`addTask`); `addTask` ya filtra campos `undefined` (Firestore los rechaza)
+✅ Add Task Modal: vigencia por defecto hoy → +1 año, día de hoy preseleccionado en "Días", y "Guardar" deshabilitado sin al menos un día
+✅ Hoy: solo muestra las ocurrencias de hoy; las completadas siguen visibles (atenuadas, tachadas) para poder desmarcarlas; solo el círculo marca, tocar la fila abre `TaskDetailsModal`
+✅ Tablero: semana en curso (lunes→domingo) con secciones plegables por día (hoy y futuros abiertos, pasados cerrados), botón de sincronizar, días pasados de solo lectura
+✅ Modelo nuevo de cumplimiento: logs por tarea+día (ver sección 8); la tarea ya no tiene `done`/`completedAt`
 
-**Pendiente inmediato:** `handleSave` en `AddTaskModal.tsx` actualmente solo hace `console.log` — el `onSubmit` real a Firestore está comentado a la espera de la tarea de validación de datos.
+**Pendiente inmediato:** nada de esto se probó aún en el Samsung A15 físico. Faltan las **reglas de Firestore** para `users/{uid}/taskLogs` (sin ellas puede fallar al guardar; el error solo queda en `error` del hook, no se muestra en UI) y validar Fin ≥ Inicio en el modal.
 
-**Próxima sesión:** Validación de datos del modal, reconectar `onSubmit`, luego Tablero y Calendario.
+**Próxima sesión:** probar en dispositivo real, publicar reglas de Firestore, luego Calendario.
 
 ---
 
 **Escrito por:** Claude Sonnet 5  
-**Fecha:** 2026-09-11  
+**Fecha:** 2026-10-02  
 **Proyecto:** Daily! Task Manager
