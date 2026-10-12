@@ -151,9 +151,10 @@ Se usa `@quidone/react-native-wheel-picker` (`DatePicker` para fecha, `WheelPick
 **No repetir:** no volver a poner `done` en `Task`; no escribir logs de "no completada" para días pasados (se derivan); no cambiar los días/vigencia de una tarea sin considerar que el historial pasado se recalcula (el estado `missed` depende del calendario actual de la tarea).
 
 ### 9. **Calendario (Semana / Mes / Año)**
-**Estructura:** `calendario.tsx` orquesta; los componentes viven en `src/components/calendar/` (`CalendarModeSwitch`, `WeekStrip`, `MonthGrid`, `YearGrid`, `DayCell`, `DayTaskList`). Reusa `isTaskForDate`, `useTasks`, `useTaskLogs`, `TaskRow` y `TaskDetailsModal` (sección 8). Los nombres de meses/días están en `src/constants/dates.ts` (Tablero aún tiene su propia copia).
+**Estructura:** `calendario.tsx` orquesta; los componentes viven en `src/components/calendar/` (`CalendarModeSwitch`, `WeekStrip`, `MonthGrid`, `YearGrid`, `DayCell`, `DayTaskList`). Reusa `isTaskForDate`, `useTasks`, `useTaskLogs`, `TaskRow` y `TaskDetailsModal` (sección 8). Los nombres de meses/días están en `src/constants/dates.ts` (Tablero y Hoy aún tienen su propia copia).
 - **Estado:** `mode`, `anchor` (fecha que define el periodo visible) y `selectedDay`. **Siempre abre en Semana con hoy seleccionado.** Botón "Hoy" aparece al alejarse.
 - **Navegación:** flechas ±1 semana/mes/año. En Mes, deslizar a los lados cambia de mes (`PanResponder` de RN, sin librerías; solo toma el gesto si es claramente horizontal). Tocar el nombre del mes abre Año; tocar una tarjeta de Año abre ese Mes. Tocar un día de un mes vecino lo selecciona y navega a ese mes.
+- **Qué día queda seleccionado al navegar** (`pickDayInMonth`): flechas en Semana mueven `anchor` y `selectedDay` ±7 días; en Mes pasan al mismo día del mes destino (ajustado a su último día, p. ej. 31 → 30) o a hoy si el destino es el mes actual; en Año solo cambia el año, no `selectedDay`. Al cambiar de modo a Semana/Mes, `anchor` pasa a ser `selectedDay`. Tocar una tarjeta de Año selecciona hoy (si es el mes actual) o el día 1.
 - **Mes:** `getMonthGrid` devuelve solo las semanas necesarias (4–6 filas, lunes primero) con días vecinos atenuados — **no** una cuadrícula fija de 6 filas (se recortó para no mostrar semanas de más del mes siguiente). La altura cambia entre meses.
 - **Indicadores por día** (`DayCell`): pasado y hoy → punto rojo + nº sin completar y punto verde + nº completadas; futuro → un punto azul + nº de tareas. No se dibuja un punto con conteo 0. Colores suaves (`#e58b8b`, `#7fcf9f`, `#7ba7ee`).
 - **Selección:** el día seleccionado pinta de morado todo el contenedor de la fecha (número y conteos dentro); hoy no seleccionado se marca con el número en morado. Las celdas no llevan borde.
@@ -374,7 +375,7 @@ module.exports = withNativeWind(config, { input: './src/global.css' });
 | Emojis inconsistentes | Mezcla emoji + IconFont | Todos con FontAwesome | Definir paleta visual antes |
 | Fuentes no se cargan | Ruta relativa mal (`@/assets/`) | Ruta relativa desde _layout (`../../assets/`) | Probar font load antes de commit |
 | Navigator.replace() flash blanco | Reemplazo inmediato de stack | Usar router.navigate() | Prefer navigate over replace |
-| `@gorhom/bottom-sheet` no visible en Android + conflicto worklets | Peer-dep de reanimated/worklets sin resolución única + sheet no renderiza en Android | Modal nativo `<Modal>` + `Animated.Value` propio | No instalar librerías de bottom-sheet sin verificar antes en dispositivo real |
+| `@gorhom/bottom-sheet` no visible en Android + conflicto worklets | Peer-dep de reanimated/worklets sin resolución única + sheet no renderiza en Android | Primero `<Modal>` nativo + `Animated.Value` propio (luego reemplazado por overlay `View`, ver fila de `<Modal>` abajo y sección 6) | No instalar librerías de bottom-sheet sin verificar antes en dispositivo real |
 | Wheel picker "pegado" (no gira) | `TouchableWithoutFeedback` envolvía todo el sheet, compitiendo por el gesto con el `ScrollView` interno del picker | Backdrop y sheet como hermanos, sheet sin `Touchable` envolvente | No envolver contenido con `ScrollView`/gestos dentro de un `TouchableWithoutFeedback` |
 | `<Modal>` nativo tarda ~2s en abrir (Android) | Cada apertura crea una ventana/Dialog nativa nueva | `View` absoluta (overlay JS) + `BackHandler` manual | No usar `<Modal>` de react-native para sheets de uso frecuente |
 | Wheel picker en gris sin datos tras un toggle | Picker montado mientras su contenedor tenía `display:"none"` → layout de tamaño 0 nunca recalculado | Montaje perezoso en el primer open de cada campo (`dateEverOpened`/`timeEverOpened`), nunca mientras está oculto | No montar componentes de lista/rueda dentro de un contenedor `display:"none"` |
@@ -407,6 +408,7 @@ module.exports = withNativeWind(config, { input: './src/global.css' });
 4. **Unificar `MONTHS`/`DAY_NAMES`** — Tablero y Hoy aún tienen su propia copia; usar `src/constants/dates.ts`
 5. **Implementar Profile sub-screens** — Notificaciones, Apariencia, Cuenta, Privacidad, Ayuda
 6. **OAuth Google & Apple** — Botones de login ya existen, falta integración
+   - **Recuperar contraseña (`forgot-password.tsx`)** — los pasos "verificar código" y "cambiar contraseña" tienen `TODO` y no llaman a Firebase (el segundo solo simula con `setTimeout`); es solo UI
 7. **Programar notificación local real** para la hora seleccionada en Add Task (hoy solo se guarda el campo `time`, no se agenda con `expo-notifications`)
 8. **Firebase Cloud Messaging** — Push notifications
 9. **Firestore Security Rules** — Publicar reglas de seguridad (incluir `users/{uid}/taskLogs`: lectura/escritura solo del dueño)

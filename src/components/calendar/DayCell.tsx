@@ -70,7 +70,7 @@ export function DayCell({
 
   return (
     // El TouchableOpacity solo da el área táctil y la separación entre celdas;
-    // el borde y las esquinas viven en el View interno.
+    // el fondo de selección y las esquinas redondeadas viven en el View interno.
     <TouchableOpacity
       className="flex-1 px-1 py-[19px]"
       style={{ opacity: dimmed ? 0.3 : 1 }}
