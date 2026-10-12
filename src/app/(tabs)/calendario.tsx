@@ -26,7 +26,13 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-native-fontawesome";
 import { useState } from "react";
-import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -228,31 +234,51 @@ export default function CalendarioScreen() {
       )}
 
       {mode === "month" && (
-        <MonthGrid
-          cells={monthCells}
-          getCounts={getCounts}
-          selectedStr={toDateStr(selectedDay)}
-          todayStr={todayStr}
-          onSelect={(cell) => {
-            setSelectedDay(cell.date);
-            if (!cell.inMonth) {
-              setAnchor(
-                new Date(cell.date.getFullYear(), cell.date.getMonth(), 1),
-              );
+        // Cuadrícula + lista del día scrollean juntas: un mes de 6 filas ocupa casi
+        // toda la pantalla y la lista quedaba sin espacio visible.
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ paddingBottom: 24 }}
+        >
+          <MonthGrid
+            cells={monthCells}
+            getCounts={getCounts}
+            selectedStr={toDateStr(selectedDay)}
+            todayStr={todayStr}
+            onSelect={(cell) => {
+              setSelectedDay(cell.date);
+              if (!cell.inMonth) {
+                setAnchor(
+                  new Date(cell.date.getFullYear(), cell.date.getMonth(), 1),
+                );
+              }
+            }}
+            onSwipe={shift}
+          />
+          <DayTaskList
+            scrollable={false}
+            date={selectedDay}
+            tasks={tasks}
+            todayStr={todayStr}
+            isCompleted={isCompleted}
+            setCompleted={setCompleted}
+            onSelectTask={(taskId) =>
+              setSelectedTask({ taskId, day: toDateStr(selectedDay) })
             }
-          }}
-          onSwipe={shift}
-        />
+          />
+        </ScrollView>
       )}
 
-      {mode === "year" ? (
+      {mode === "year" && (
         <YearGrid
           year={anchor.getFullYear()}
           tasks={tasks}
           today={today}
           onSelectMonth={selectMonthFromYear}
         />
-      ) : (
+      )}
+
+      {mode === "week" && (
         <DayTaskList
           date={selectedDay}
           tasks={tasks}
