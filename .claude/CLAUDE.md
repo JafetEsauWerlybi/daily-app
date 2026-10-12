@@ -145,7 +145,7 @@ Se usa `@quidone/react-native-wheel-picker` (`DatePicker` para fecha, `WheelPick
 - **Cuándo cae una tarea en un día** (`isTaskForDate` en `src/lib/task-schedule.ts`): con `repeatDays` → días dentro de `dateStart..dateEnd` cuyo weekday (0=Lun..6=Dom) esté en `repeatDays`; sin `repeatDays` → solo `dateStart` (tarea individual; el quick-add de Hoy usa `dateStart` = hoy). Tareas viejas sin `dateStart` usan el día de `createdAt` si ya es conocido.
 - **Estado de una ocurrencia** (`getOccurrenceStatus`): `completed` (log con `completed: true`), `pending` (hoy/futuro sin log), `missed` (día pasado sin log). **"No completada" se calcula, no se guarda** — no hay procesos ni Cloud Functions que escriban días perdidos.
 - **Días pasados son de solo lectura**: hoy y días futuros sí se pueden marcar/desmarcar.
-- Add Task Modal: vigencia por defecto hoy → +1 año, día de hoy preseleccionado y "Guardar" deshabilitado sin días; hora de notificación por defecto 08:00 solo si se marca "¿Quieres notificación?".
+- Add Task Modal: abre con una sola fecha (tarea de un día: guarda solo `dateStart`, sin `dateEnd` ni `repeatDays`). El checkbox "¿Tarea recurrente?" muestra el campo Fin (mismo wheel, vigencia por defecto hoy → +1 año) y los "Días que se realizará" (día de hoy preseleccionado; mientras haya exactamente 1 día marcado, ese día sigue al weekday de la fecha de inicio al mover su wheel; con 2 o más ya no se toca); "Guardar" se deshabilita solo si es recurrente y no hay días; hora de notificación por defecto 08:00 solo si se marca "¿Quieres notificación?".
 - Botón de sincronizar (Tablero): `refresh()` de `use-tasks` y `use-task-logs` re-suscribe los `onSnapshot` (Firestore ya es en tiempo real; el botón solo fuerza re-lectura).
 
 **No repetir:** no volver a poner `done` en `Task`; no escribir logs de "no completada" para días pasados (se derivan); no cambiar los días/vigencia de una tarea sin considerar que el historial pasado se recalcula (el estado `missed` depende del calendario actual de la tarea).
@@ -160,6 +160,7 @@ Se usa `@quidone/react-native-wheel-picker` (`DatePicker` para fecha, `WheelPick
 - **Selección:** el día seleccionado pinta de morado todo el contenedor de la fecha (número y conteos dentro); hoy no seleccionado se marca con el número en morado. Las celdas no llevan borde.
 - **Logs:** Semana/Mes se suscriben al rango visible (primer→último día mostrado); Año solo cuenta tareas (`countTasksInMonth`) y no necesita logs.
 - **Lista del día:** mismas reglas que Tablero (pasado solo lectura; hoy y futuro editables).
+- **Acciones en el detalle (solo Calendario, Semana y Mes):** `TaskDetailsModal` recibe `actions` opcionales (Hoy y Tablero no las pasan). Se arman en `buildActions` de `calendario.tsx`; días pasados no tienen acciones. **Hoy:** "Finalizar hoy" (solo tareas con `repeatDays`; pone `dateEnd` = hoy) y "Marcar/Quitar como completada". **Futuro:** "Cerrar este día" (solo pone `dateEnd` = ese día, inclusivo; **no** escribe log ni marca el día como completado), "Eliminar tarea" (si `dateStart` > hoy o no existe, borra la tarea y sus logs; si ya empezó, pone `dateEnd` = día anterior para conservar historial) y "Marcar/Quitar como completada". Finalizar/Cerrar/Eliminar y toda acción de día futuro piden confirmación con `ConfirmModal` (prop `icon` opcional); marcar hoy no. `use-tasks` expone `updateTaskEnd` y `deleteTask` (este último borra también `users/{uid}/taskLogs` con `taskId` igual).
 
 **No repetir (estilos):**
 - **No usar clases arbitrarias de NativeWind para tamaño de fuente** (`text-[7px]`, `text-[5px]`…): no se aplican y el texto sale al tamaño por defecto. Usar `style={{ fontSize }}` (con `lineHeight`) como en `COUNT_FONT_SIZE` de `DayCell.tsx`. Los valores arbitrarios de espaciado sí funcionaron (`py-[19px]`).
@@ -449,26 +450,22 @@ npx tsc --noEmit
 
 ---
 
-## 📌 Última Sesión: 2026-10-02 (segunda parte)
+## 📌 Última Sesión: 2026-10-12
 
-**Logros (guardado de tareas, Hoy y Tablero semanal con logs de cumplimiento):**
-✅ Add Task Modal: checkbox "¿Quieres notificación?" — el wheel de hora solo aparece (y `time` solo se guarda) si está marcado; hora por defecto 08:00
-✅ Add Task Modal: `onSubmit` descomentado y conectado a Firestore (`addTask`); `addTask` ya filtra campos `undefined` (Firestore los rechaza)
-✅ Add Task Modal: vigencia por defecto hoy → +1 año, día de hoy preseleccionado en "Días", y "Guardar" deshabilitado sin al menos un día
-✅ Hoy: solo muestra las ocurrencias de hoy; las completadas siguen visibles (atenuadas, tachadas) para poder desmarcarlas; solo el círculo marca, tocar la fila abre `TaskDetailsModal`
-✅ Tablero: semana en curso (lunes→domingo) con secciones plegables por día (hoy y futuros abiertos, pasados cerrados), botón de sincronizar, días pasados de solo lectura
-✅ Modelo nuevo de cumplimiento: logs por tarea+día (ver sección 8); la tarea ya no tiene `done`/`completedAt`
-
-✅ Calendario: Semana / Mes / Año con indicadores por día (rojo/verde en pasado y hoy, azul en futuro), selección con contenedor morado, deslizar para cambiar de mes, tocar el mes para ver el año, lista del día con las reglas de Tablero (ver sección 9)
-✅ Ajustes de estilo del Calendario hechos con feedback en dispositivo: celdas sin borde, más espacio entre fechas, mes con solo las semanas necesarias, año con tarjetas que llenan el alto
-✅ Bugs encontrados: `text-[Npx]` no aplica el tamaño de fuente y `flex-1` en el contenedor interno de la celda dejaba los conteos fuera del fondo (ambos en "No repetir" de la sección 9)
+**Logros (acciones sobre tareas en Calendario y modal de nueva tarea):**
+✅ Calendario, vista Mes: cuadrícula + lista del día en un solo `ScrollView` vertical (sección 9)
+✅ Calendario (Semana y Mes): el detalle de tarea muestra acciones en hoy y días futuros: Finalizar hoy, Cerrar este día, Eliminar tarea y Marcar/Quitar como completada, con confirmación (sección 9). `use-tasks` expone `updateTaskEnd` y `deleteTask` borra también los logs
+✅ Add Task Modal: abre con una sola fecha; el checkbox "¿Tarea recurrente?" muestra Fin y "Días que se realizará"; con 1 solo día marcado, ese día sigue al weekday de la fecha de inicio (sección 8)
+✅ Docs corregidas: comentario de `DayCell`, fila de `@gorhom` y pendiente de "Recuperar contraseña"
 
 **Pendiente inmediato:** las **reglas de Firestore** para `users/{uid}/taskLogs` (sin ellas puede fallar al guardar; el error solo queda en `error` del hook, no se muestra en UI) y validar Fin ≥ Inicio en el modal. El Calendario sí se ha ido viendo en el celular durante los ajustes de estilo, pero el guardado/lectura de logs y los fixes anteriores del modal siguen sin confirmarse en el Samsung A15.
+
+**Pendiente además:** las reglas de Firestore deben permitir `update`/`delete` sobre `tasks` y consultar `users/{uid}/taskLogs` por `taskId` (las acciones nuevas fallan sin avisar en UI si no); probar en el Samsung A15 que `ConfirmModal` (`<Modal>` nativo) quede encima del detalle.
 
 **Próxima sesión:** publicar reglas de Firestore, validar fechas del modal, luego Perfil (sub-pantallas) y notificaciones locales.
 
 ---
 
-**Escrito por:** Claude Sonnet 5  
-**Fecha:** 2026-10-02  
+**Escrito por:** Claude Sonnet 5.5  
+**Fecha:** 2026-10-12  
 **Proyecto:** Daily! Task Manager

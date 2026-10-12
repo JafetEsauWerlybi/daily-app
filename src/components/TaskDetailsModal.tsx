@@ -19,10 +19,19 @@ const STATUS_LABELS: Record<OccurrenceStatus, string> = {
   missed: "No completada",
 };
 
+// Acción opcional del modal (solo Calendario las pasa; Hoy y Tablero no).
+export interface TaskAction {
+  key: string;
+  label: string;
+  tone?: "default" | "danger";
+  onPress: () => void;
+}
+
 interface TaskDetailsModalProps {
   task: Task | null;
   // Estado de la ocurrencia que se está viendo (la tarea en sí no tiene estado).
   status?: OccurrenceStatus;
+  actions?: TaskAction[];
   onClose: () => void;
 }
 
@@ -49,6 +58,7 @@ function Row({
 export function TaskDetailsModal({
   task,
   status = "pending",
+  actions,
   onClose,
 }: TaskDetailsModalProps) {
   const insets = useSafeAreaInsets();
@@ -214,6 +224,25 @@ export function TaskDetailsModal({
             </View>
           )}
         </Row>
+
+        {actions?.map((action) => (
+          <TouchableOpacity
+            key={action.key}
+            className="bg-slate-800 rounded-lg py-3 items-center border border-gray-700 mt-2"
+            onPress={action.onPress}
+          >
+            <Text
+              className={
+                action.tone === "danger"
+                  ? "text-red-400 text-sm"
+                  : "text-purple-400 text-sm"
+              }
+              style={{ fontFamily: "MomoTrustSans-Medium" }}
+            >
+              {action.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
 
         <TouchableOpacity
           className="bg-slate-800 rounded-lg py-3 items-center border border-gray-700 mt-2"

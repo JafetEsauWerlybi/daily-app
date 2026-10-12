@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Modal, View, Text, TouchableOpacity, Animated, TouchableWithoutFeedback } from 'react-native';
 import { FontAwesomeIcon } from '@fortawesome/react-native-fontawesome';
 import { faDoorOpen } from '@fortawesome/free-solid-svg-icons';
+import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 
 interface ConfirmModalProps {
   visible: boolean;
@@ -9,6 +10,7 @@ interface ConfirmModalProps {
   message: string;
   confirmText?: string;
   cancelText?: string;
+  icon?: IconDefinition;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -19,6 +21,7 @@ export function ConfirmModal({
   message,
   confirmText = 'Sí, salir',
   cancelText = 'Cancelar',
+  icon = faDoorOpen,
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
@@ -47,7 +50,7 @@ export function ConfirmModal({
               className="w-full bg-slate-900 rounded-2xl border border-gray-700 px-6 py-6 items-center"
             >
               <View className="w-14 h-14 rounded-full bg-purple-500/20 justify-center items-center mb-4">
-                <FontAwesomeIcon icon={faDoorOpen} size={22} color="#9184d9" />
+                <FontAwesomeIcon icon={icon} size={22} color="#9184d9" />
               </View>
 
               <Text

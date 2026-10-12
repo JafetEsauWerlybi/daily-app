@@ -5,7 +5,9 @@ import {
   where,
   onSnapshot,
   doc,
-  deleteDoc,
+  getDocs,
+  updateDoc,
+  writeBatch,
   addDoc,
   serverTimestamp,
 } from "firebase/firestore";
@@ -61,11 +63,35 @@ export function useTasks(userId: string | undefined) {
     setRefreshKey((k) => k + 1);
   };
 
+  // Borra la tarea junto con sus logs de cumplimiento (users/{uid}/taskLogs).
   const deleteTask = async (taskId: string) => {
     try {
-      await deleteDoc(doc(db, "tasks", taskId));
+      const batch = writeBatch(db);
+      if (userId) {
+        const logs = await getDocs(
+          query(
+            collection(db, "users", userId, "taskLogs"),
+            where("taskId", "==", taskId),
+          ),
+        );
+        logs.forEach((d) => batch.delete(d.ref));
+      }
+      batch.delete(doc(db, "tasks", taskId));
+      await batch.commit();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error deleting task");
+    }
+  };
+
+  // Corta la vigencia de la tarea: deja de ocurrir después de `dateEnd`.
+  const updateTaskEnd = async (taskId: string, dateEnd: string) => {
+    try {
+      await updateDoc(doc(db, "tasks", taskId), {
+        dateEnd,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error updating task");
     }
   };
 
@@ -87,5 +113,14 @@ export function useTasks(userId: string | undefined) {
     }
   };
 
-  return { tasks, loading, syncing, error, refresh, deleteTask, addTask };
+  return {
+    tasks,
+    loading,
+    syncing,
+    error,
+    refresh,
+    deleteTask,
+    updateTaskEnd,
+    addTask,
+  };
 }

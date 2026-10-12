@@ -50,6 +50,11 @@ function todayIndex(): number {
   return (new Date().getDay() + 6) % 7;
 }
 
+// Día de la semana (0=Lunes..6=Domingo) de un "YYYY-MM-DD", en hora local.
+function weekdayIndex(dateStr: string): number {
+  return (new Date(`${dateStr}T00:00:00`).getDay() + 6) % 7;
+}
+
 function parseTimeStr(str: string): { hour: number; minute: number } {
   const [h, m] = str.split(":").map(Number);
   return {
@@ -130,6 +135,8 @@ export function AddTaskModal({
   >(null);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [notify, setNotify] = useState(false);
+  // Sin recurrencia: una sola fecha y sin días. Con recurrencia aparecen Fin y Días.
+  const [recurring, setRecurring] = useState(false);
   const [mounted, setMounted] = useState(visible);
   const [dateEverOpened, setDateEverOpened] = useState(false);
   const [timeEverOpened, setTimeEverOpened] = useState(false);
@@ -148,6 +155,7 @@ export function AddTaskModal({
       setDateStart(range.start);
       setDateEnd(range.end);
       setRepeatDays([todayIndex()]);
+      setRecurring(false);
       Animated.parallel([
         Animated.spring(translateY, {
           toValue: 0,
@@ -196,10 +204,21 @@ export function AddTaskModal({
     setActiveDatePicker(null);
     setShowTimePicker(false);
     setNotify(false);
+    setRecurring(false);
     setDateEverOpened(false);
     setTimeEverOpened(false);
     dateFade.setValue(0);
     timeFade.setValue(0);
+  };
+
+  const toggleRecurring = () => {
+    if (recurring) {
+      // Al quitar la recurrencia desaparece el campo Fin: cierra su wheel.
+      if (activeDatePicker === "end") setActiveDatePicker(null);
+      setRecurring(false);
+      return;
+    }
+    setRecurring(true);
   };
 
   const toggleRepeatDay = (day: number) => {
@@ -276,18 +295,22 @@ export function AddTaskModal({
   };
 
   const handleSave = () => {
-    if (!title.trim() || repeatDays.length === 0) return;
+    if (!title.trim() || (recurring && repeatDays.length === 0)) return;
+    // Tarea de un solo día: solo dateStart (sin repeatDays, ver isTaskForDate).
     onSubmit({
       title: title.trim(),
       category,
       time: notify && time ? time : undefined,
       dateStart: dateStart || undefined,
-      dateEnd: dateEnd || undefined,
-      repeatDays: repeatDays.length > 0 ? repeatDays : undefined,
+      dateEnd: recurring ? dateEnd || undefined : undefined,
+      repeatDays: recurring ? repeatDays : undefined,
     });
     resetForm();
     onClose();
   };
+
+  // Con recurrencia hace falta al menos un día; sin ella no hay días que elegir.
+  const saveDisabled = recurring && repeatDays.length === 0;
 
   if (!mounted) return null;
 
@@ -377,12 +400,49 @@ export function AddTaskModal({
               })}
             </View>
 
-            {/* Rango de fechas */}
+            {/* Recurrencia */}
+            <View className="flex-row items-center justify-between mb-4">
+              <Text
+                className="text-sm text-gray-300"
+                style={{ fontFamily: "MomoTrustSans-Medium" }}
+              >
+                ¿Tarea recurrente?
+              </Text>
+              <TouchableOpacity
+                className="flex-row items-center gap-2"
+                onPress={toggleRecurring}
+              >
+                <View
+                  className={`w-4 h-4 rounded border-2 justify-center items-center ${
+                    recurring
+                      ? "bg-purple-500 border-purple-500"
+                      : "border-gray-600"
+                  }`}
+                >
+                  {recurring && (
+                    <Text
+                      className="text-white text-[10px]"
+                      style={{ fontFamily: "MomoTrustSans-Bold" }}
+                    >
+                      ✓
+                    </Text>
+                  )}
+                </View>
+                <Text
+                  className="text-xs text-gray-400"
+                  style={{ fontFamily: "MomoTrustSans-Regular" }}
+                >
+                  Sí
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Fecha / Rango de fechas */}
             <Text
               className="text-sm text-gray-300 mb-2"
               style={{ fontFamily: "MomoTrustSans-Medium" }}
             >
-              Rango de fechas
+              {recurring ? "Rango de fechas" : "Fecha"}
             </Text>
             <View className="flex-row gap-2 mb-2">
               <TouchableOpacity
@@ -401,26 +461,30 @@ export function AddTaskModal({
                   }
                   style={{ fontFamily: "MomoTrustSans-Regular" }}
                 >
-                  {dateStart || "Inicio"}
+                  {dateStart || (recurring ? "Inicio" : "Fecha")}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                className={`flex-1 bg-slate-800 border rounded-lg px-3 py-2.5 ${
-                  activeDatePicker === "end"
-                    ? "border-purple-400"
-                    : "border-gray-700"
-                }`}
-                onPress={() => openDatePicker("end")}
-              >
-                <Text
-                  className={
-                    dateEnd ? "text-sm text-gray-100" : "text-sm text-gray-500"
-                  }
-                  style={{ fontFamily: "MomoTrustSans-Regular" }}
+              {recurring && (
+                <TouchableOpacity
+                  className={`flex-1 bg-slate-800 border rounded-lg px-3 py-2.5 ${
+                    activeDatePicker === "end"
+                      ? "border-purple-400"
+                      : "border-gray-700"
+                  }`}
+                  onPress={() => openDatePicker("end")}
                 >
-                  {dateEnd || "Fin"}
-                </Text>
-              </TouchableOpacity>
+                  <Text
+                    className={
+                      dateEnd
+                        ? "text-sm text-gray-100"
+                        : "text-sm text-gray-500"
+                    }
+                    style={{ fontFamily: "MomoTrustSans-Regular" }}
+                  >
+                    {dateEnd || "Fin"}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View
@@ -435,7 +499,14 @@ export function AddTaskModal({
                       toDateStr(new Date())
                     }T00:00:00`}
                     onDateChanged={({ date }) => {
-                      if (activeDatePicker === "start") setDateStart(date);
+                      if (activeDatePicker === "start") {
+                        setDateStart(date);
+                        // Con un solo día marcado, ese día sigue a la fecha de
+                        // inicio; con 2 o más el usuario ya los eligió a mano.
+                        setRepeatDays((prev) =>
+                          prev.length === 1 ? [weekdayIndex(date)] : prev,
+                        );
+                      }
                       if (activeDatePicker === "end") setDateEnd(date);
                     }}
                     locale="es-MX"
@@ -544,69 +615,73 @@ export function AddTaskModal({
               )}
             </View>
 
-            {/* Días que se realizará */}
-            <View className="flex-row items-center justify-between mb-2">
-              <Text
-                className="text-sm text-gray-300"
-                style={{ fontFamily: "MomoTrustSans-Medium" }}
-              >
-                Días que se realizará
-              </Text>
-              <TouchableOpacity
-                className="flex-row items-center gap-2"
-                onPress={toggleAllDays}
-              >
-                <View
-                  className={`w-4 h-4 rounded border-2 justify-center items-center ${
-                    allDaysSelected
-                      ? "bg-purple-500 border-purple-500"
-                      : "border-gray-600"
-                  }`}
-                >
-                  {allDaysSelected && (
-                    <Text
-                      className="text-white text-[10px]"
-                      style={{ fontFamily: "MomoTrustSans-Bold" }}
-                    >
-                      ✓
-                    </Text>
-                  )}
-                </View>
-                <Text
-                  className="text-xs text-gray-400"
-                  style={{ fontFamily: "MomoTrustSans-Regular" }}
-                >
-                  Todos los días
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <View className="flex-row gap-2 mb-6">
-              {DAY_LABELS.map((label, index) => {
-                const selected = repeatDays.includes(index);
-                return (
-                  <TouchableOpacity
-                    key={index}
-                    onPress={() => toggleRepeatDay(index)}
-                    className={`w-9 h-9 rounded-full border-2 justify-center items-center ${
-                      selected
-                        ? "bg-purple-500 border-purple-500"
-                        : "border-gray-700"
-                    }`}
+            {/* Días que se realizará (solo con recurrencia) */}
+            {recurring && (
+              <>
+                <View className="flex-row items-center justify-between mb-2">
+                  <Text
+                    className="text-sm text-gray-300"
+                    style={{ fontFamily: "MomoTrustSans-Medium" }}
                   >
-                    <Text
-                      className={
-                        selected
-                          ? "text-white text-xs"
-                          : "text-gray-400 text-xs"
-                      }
-                      style={{ fontFamily: "MomoTrustSans-Medium" }}
+                    Días que se realizará
+                  </Text>
+                  <TouchableOpacity
+                    className="flex-row items-center gap-2"
+                    onPress={toggleAllDays}
+                  >
+                    <View
+                      className={`w-4 h-4 rounded border-2 justify-center items-center ${
+                        allDaysSelected
+                          ? "bg-purple-500 border-purple-500"
+                          : "border-gray-600"
+                      }`}
                     >
-                      {label}
+                      {allDaysSelected && (
+                        <Text
+                          className="text-white text-[10px]"
+                          style={{ fontFamily: "MomoTrustSans-Bold" }}
+                        >
+                          ✓
+                        </Text>
+                      )}
+                    </View>
+                    <Text
+                      className="text-xs text-gray-400"
+                      style={{ fontFamily: "MomoTrustSans-Regular" }}
+                    >
+                      Todos los días
                     </Text>
                   </TouchableOpacity>
-                );
-              })}
-            </View>
+                </View>
+                <View className="flex-row gap-2 mb-6">
+                  {DAY_LABELS.map((label, index) => {
+                    const selected = repeatDays.includes(index);
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        onPress={() => toggleRepeatDay(index)}
+                        className={`w-9 h-9 rounded-full border-2 justify-center items-center ${
+                          selected
+                            ? "bg-purple-500 border-purple-500"
+                            : "border-gray-700"
+                        }`}
+                      >
+                        <Text
+                          className={
+                            selected
+                              ? "text-white text-xs"
+                              : "text-gray-400 text-xs"
+                          }
+                          style={{ fontFamily: "MomoTrustSans-Medium" }}
+                        >
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            )}
           </ScrollView>
 
           {/* Acciones */}
@@ -624,10 +699,10 @@ export function AddTaskModal({
             </TouchableOpacity>
             <TouchableOpacity
               className={`flex-1 bg-purple-500 rounded-lg py-3 items-center ${
-                repeatDays.length === 0 ? "opacity-40" : ""
+                saveDisabled ? "opacity-40" : ""
               }`}
               onPress={handleSave}
-              disabled={repeatDays.length === 0}
+              disabled={saveDisabled}
             >
               <Text
                 className="text-white text-sm"

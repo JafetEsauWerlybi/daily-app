@@ -6,7 +6,8 @@ import { DayTaskList } from "@/components/calendar/DayTaskList";
 import { MonthGrid } from "@/components/calendar/MonthGrid";
 import { WeekStrip } from "@/components/calendar/WeekStrip";
 import { YearGrid } from "@/components/calendar/YearGrid";
-import { TaskDetailsModal } from "@/components/TaskDetailsModal";
+import { ConfirmModal } from "@/components/ConfirmModal";
+import { TaskAction, TaskDetailsModal } from "@/components/TaskDetailsModal";
 import { MONTHS } from "@/constants/dates";
 import { useAuth } from "@/contexts/auth-context";
 import { useBackHandler } from "@/hooks/use-back-handler";
@@ -21,9 +22,13 @@ import {
   toDateStr,
 } from "@/lib/task-schedule";
 import {
+  faCheck,
   faChevronLeft,
   faChevronRight,
+  faFlagCheckered,
+  faTrash,
 } from "@fortawesome/free-solid-svg-icons";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/react-native-fontawesome";
 import { useState } from "react";
 import {
@@ -34,6 +39,14 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+interface PendingConfirm {
+  title: string;
+  message: string;
+  confirmText: string;
+  icon: IconDefinition;
+  run: () => void;
+}
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -72,6 +85,8 @@ export default function CalendarioScreen() {
     taskId: string;
     day: string;
   } | null>(null);
+  // Confirmación pendiente de una acción del modal de detalle.
+  const [confirm, setConfirm] = useState<PendingConfirm | null>(null);
 
   const weekDays = getWeekDays(anchor);
   const monthCells = getMonthGrid(anchor.getFullYear(), anchor.getMonth());
@@ -87,7 +102,12 @@ export default function CalendarioScreen() {
           ]
         : [todayStr, todayStr];
 
-  const { tasks, loading: tasksLoading } = useTasks(user?.uid);
+  const {
+    tasks,
+    loading: tasksLoading,
+    deleteTask,
+    updateTaskEnd,
+  } = useTasks(user?.uid);
   const {
     isCompleted,
     setCompleted,
@@ -148,6 +168,117 @@ export default function CalendarioScreen() {
   const detailTask = selectedTask
     ? (tasks.find((t) => t.id === selectedTask.taskId) ?? null)
     : null;
+
+  // Acciones del modal de detalle (solo hoy y días futuros; el pasado es de solo
+  // lectura). Finalizar/Cerrar/Eliminar piden confirmación porque cambian la
+  // vigencia de la tarea y, con ella, el calendario de todos sus días.
+  const buildActions = (): TaskAction[] | undefined => {
+    if (!selectedTask || !detailTask) return undefined;
+    const { taskId, day } = selectedTask;
+    if (day < todayStr) return undefined;
+
+    const isToday = day === todayStr;
+    const recurring = (detailTask.repeatDays?.length ?? 0) > 0;
+    const done = isCompleted(taskId, day);
+    const close = () => setSelectedTask(null);
+
+    const toggle: TaskAction = {
+      key: "toggle",
+      label: done ? "Quitar como completada" : "Marcar como completada",
+      onPress: () => {
+        if (isToday) {
+          setCompleted(taskId, day, !done);
+          close();
+          return;
+        }
+        setConfirm({
+          title: done ? "¿Quitar como completada?" : "¿Marcar como completada?",
+          message: `Se actualizará esta tarea para el ${day}.`,
+          confirmText: "Sí, continuar",
+          icon: faCheck,
+          run: () => {
+            setCompleted(taskId, day, !done);
+            close();
+          },
+        });
+      },
+    };
+
+    const actions: TaskAction[] = [];
+
+    if (isToday) {
+      if (recurring && detailTask.dateEnd !== todayStr) {
+        actions.push({
+          key: "finish-today",
+          label: "Finalizar hoy",
+          onPress: () =>
+            setConfirm({
+              title: "¿Finalizar hoy?",
+              message:
+                "La tarea dejará de repetirse después de hoy. Hoy sigue contando.",
+              confirmText: "Sí, finalizar",
+              icon: faFlagCheckered,
+              run: () => {
+                updateTaskEnd(taskId, todayStr);
+                close();
+              },
+            }),
+        });
+      }
+      actions.push(toggle);
+      return actions;
+    }
+
+    if (recurring && detailTask.dateEnd !== day) {
+      actions.push({
+        key: "close-day",
+        label: "Cerrar este día",
+        onPress: () =>
+          setConfirm({
+            title: "¿Cerrar este día?",
+            message: `La tarea terminará el ${day}. Ese día sigue contando, pero no se marca como completada.`,
+            confirmText: "Sí, cerrar",
+            icon: faFlagCheckered,
+            run: () => {
+              updateTaskEnd(taskId, day);
+              close();
+            },
+          }),
+      });
+    }
+
+    actions.push({
+      key: "delete",
+      label: "Eliminar tarea",
+      tone: "danger",
+      onPress: () => {
+        // Si aún no empieza (o no tiene inicio) se borra completa; si ya empezó,
+        // solo se corta la vigencia al día anterior para conservar el historial.
+        const startsLater =
+          !detailTask.dateStart || detailTask.dateStart > todayStr;
+        setConfirm({
+          title: "¿Eliminar tarea?",
+          message: startsLater
+            ? "Se borrará la tarea completa. No se puede deshacer."
+            : `La tarea dejará de aparecer desde el ${day}. El historial anterior se conserva.`,
+          confirmText: "Sí, eliminar",
+          icon: faTrash,
+          run: () => {
+            if (startsLater) {
+              deleteTask(taskId);
+            } else {
+              const before = addDays(new Date(`${day}T00:00:00`), -1);
+              updateTaskEnd(taskId, toDateStr(before));
+            }
+            close();
+          },
+        });
+      },
+    });
+
+    actions.push(toggle);
+    return actions;
+  };
 
   if (tasksLoading || logsLoading) {
     return (
@@ -302,7 +433,21 @@ export default function CalendarioScreen() {
               )
             : "pending"
         }
+        actions={buildActions()}
         onClose={() => setSelectedTask(null)}
+      />
+
+      <ConfirmModal
+        visible={confirm !== null}
+        title={confirm?.title ?? ""}
+        message={confirm?.message ?? ""}
+        confirmText={confirm?.confirmText}
+        icon={confirm?.icon}
+        onConfirm={() => {
+          confirm?.run();
+          setConfirm(null);
+        }}
+        onCancel={() => setConfirm(null)}
       />
     </SafeAreaView>
   );
