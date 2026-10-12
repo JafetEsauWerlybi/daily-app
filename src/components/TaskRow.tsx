@@ -1,3 +1,4 @@
+import { useTheme } from "@/contexts/theme-context";
 import { CATEGORY_COLORS } from "@/constants/categories";
 import { OccurrenceStatus, Task } from "@/types/task";
 import { faCheck, faXmark } from "@fortawesome/free-solid-svg-icons";
@@ -20,6 +21,7 @@ export function TaskRow({
   onToggle,
   onPress,
 }: TaskRowProps) {
+  const { colors } = useTheme();
   const completed = status === "completed";
   const missed = status === "missed";
 
@@ -45,7 +47,7 @@ export function TaskRow({
           }`}
         >
           {completed && (
-            <FontAwesomeIcon icon={faCheck} size={12} color="#fff" />
+            <FontAwesomeIcon icon={faCheck} size={12} color={colors.onAccent} />
           )}
           {missed && (
             <FontAwesomeIcon icon={faXmark} size={12} color="#ef4444" />
@@ -74,7 +76,7 @@ export function TaskRow({
               }}
             >
               <Text
-                className="text-[11px] text-white"
+                className="text-[11px] text-pure"
                 style={{ fontFamily: "MomoTrustSans-Medium" }}
               >
                 {task.category}

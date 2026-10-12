@@ -1,4 +1,5 @@
 import { CATEGORY_COLORS, TASK_CATEGORIES } from "@/constants/categories";
+import { useTheme } from "@/contexts/theme-context";
 import { TaskCategory } from "@/types/task";
 import WheelPicker, { DatePicker } from "@quidone/react-native-wheel-picker";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -67,16 +68,6 @@ const PICKER_ITEM_HEIGHT = 34;
 const PICKER_VISIBLE_ITEMS = 3;
 const PICKER_PLACEHOLDER_HEIGHT = PICKER_ITEM_HEIGHT * PICKER_VISIBLE_ITEMS;
 
-const pickerItemTextStyle = {
-  color: "#e9e9ed",
-  fontFamily: "MomoTrustSans-Medium",
-  fontSize: 15,
-};
-const pickerOverlayStyle = {
-  backgroundColor: "rgba(145, 132, 217, 0.12)",
-  borderRadius: 8,
-};
-
 export interface AddTaskData {
   title: string;
   category: TaskCategory;
@@ -100,6 +91,17 @@ export function AddTaskModal({
   onSubmit,
 }: AddTaskModalProps) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  // Estilos del wheel: la librería no acepta clases, así que salen del tema.
+  const pickerItemTextStyle = {
+    color: colors.white,
+    fontFamily: "MomoTrustSans-Medium",
+    fontSize: 15,
+  };
+  const pickerOverlayStyle = {
+    backgroundColor: colors.accentSoft,
+    borderRadius: 8,
+  };
   const translateY = useRef(new Animated.Value(400)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const dateFade = useRef(new Animated.Value(0)).current;
@@ -360,7 +362,7 @@ export function AddTaskModal({
             <TextInput
               className="bg-slate-800 border border-gray-700 rounded-lg px-3 py-2.5 text-gray-100 text-sm mb-4"
               placeholder="¿Qué necesitas hacer?"
-              placeholderTextColor="#666"
+              placeholderTextColor={colors.gray500}
               value={title}
               onChangeText={setTitle}
               style={{ fontFamily: "MomoTrustSans-Regular" }}
@@ -390,7 +392,7 @@ export function AddTaskModal({
                     }}
                   >
                     <Text
-                      className="text-xs text-white"
+                      className="text-xs text-pure"
                       style={{ fontFamily: "MomoTrustSans-Medium" }}
                     >
                       {cat}
@@ -421,7 +423,7 @@ export function AddTaskModal({
                 >
                   {recurring && (
                     <Text
-                      className="text-white text-[10px]"
+                      className="text-onaccent text-[10px]"
                       style={{ fontFamily: "MomoTrustSans-Bold" }}
                     >
                       ✓
@@ -542,7 +544,7 @@ export function AddTaskModal({
                 >
                   {notify && (
                     <Text
-                      className="text-white text-[10px]"
+                      className="text-onaccent text-[10px]"
                       style={{ fontFamily: "MomoTrustSans-Bold" }}
                     >
                       ✓
@@ -638,7 +640,7 @@ export function AddTaskModal({
                     >
                       {allDaysSelected && (
                         <Text
-                          className="text-white text-[10px]"
+                          className="text-onaccent text-[10px]"
                           style={{ fontFamily: "MomoTrustSans-Bold" }}
                         >
                           ✓
@@ -669,7 +671,7 @@ export function AddTaskModal({
                         <Text
                           className={
                             selected
-                              ? "text-white text-xs"
+                              ? "text-onaccent text-xs"
                               : "text-gray-400 text-xs"
                           }
                           style={{ fontFamily: "MomoTrustSans-Medium" }}
@@ -705,7 +707,7 @@ export function AddTaskModal({
               disabled={saveDisabled}
             >
               <Text
-                className="text-white text-sm"
+                className="text-onaccent text-sm"
                 style={{ fontFamily: "MomoTrustSans-SemiBold" }}
               >
                 Guardar

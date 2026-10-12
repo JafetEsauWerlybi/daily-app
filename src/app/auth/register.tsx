@@ -1,3 +1,4 @@
+import { useTheme } from "@/contexts/theme-context";
 import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -7,6 +8,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { Link } from "expo-router";
 
 export default function RegisterScreen() {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -62,7 +64,7 @@ export default function RegisterScreen() {
             <TextInput
               className="bg-slate-800 rounded-lg px-3 py-2 text-gray-100 text-sm border border-gray-700"
               placeholder="Tu nombre"
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.gray500}
               value={name}
               onChangeText={setName}
               editable={!loading}
@@ -77,7 +79,7 @@ export default function RegisterScreen() {
             <TextInput
               className="bg-slate-800 rounded-lg px-3 py-2 text-gray-100 text-sm border border-gray-700"
               placeholder="tu@email.com"
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.gray500}
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -94,7 +96,7 @@ export default function RegisterScreen() {
               <TextInput
                 className="flex-1 py-2 text-gray-100 text-sm"
                 placeholder="••••••••"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.gray500}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
@@ -108,7 +110,7 @@ export default function RegisterScreen() {
                 <FontAwesomeIcon
                   icon={showPassword ? faEyeSlash : faEye}
                   size={16}
-                  color="#9184d9"
+                  color={colors.accent}
                 />
               </TouchableOpacity>
             </View>
@@ -124,9 +126,9 @@ export default function RegisterScreen() {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={colors.onAccent} />
             ) : (
-              <Text className="text-white text-base" style={{ fontFamily: "MomoTrustSans-SemiBold" }}>
+              <Text className="text-onaccent text-base" style={{ fontFamily: "MomoTrustSans-SemiBold" }}>
                 Crear cuenta
               </Text>
             )}

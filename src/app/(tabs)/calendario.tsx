@@ -1,3 +1,4 @@
+import { useTheme } from "@/contexts/theme-context";
 import {
   CalendarMode,
   CalendarModeSwitch,
@@ -71,6 +72,7 @@ function pickDayInMonth(target: Date, today: Date, current: Date): Date {
 }
 
 export default function CalendarioScreen() {
+  const { colors } = useTheme();
   useBackHandler("calendario");
   const { user } = useAuth();
 
@@ -287,7 +289,7 @@ export default function CalendarioScreen() {
         edges={["top", "left", "right"]}
       >
         <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" color="#9184d9" />
+          <ActivityIndicator size="large" color={colors.accent} />
         </View>
       </SafeAreaView>
     );
@@ -327,7 +329,7 @@ export default function CalendarioScreen() {
           className="w-9 h-9 items-center justify-center"
           onPress={() => shift(-1)}
         >
-          <FontAwesomeIcon icon={faChevronLeft} size={16} color="#9184d9" />
+          <FontAwesomeIcon icon={faChevronLeft} size={16} color={colors.accent} />
         </TouchableOpacity>
         {mode === "month" ? (
           <TouchableOpacity onPress={() => setMode("year")} activeOpacity={0.7}>
@@ -350,7 +352,7 @@ export default function CalendarioScreen() {
           className="w-9 h-9 items-center justify-center"
           onPress={() => shift(1)}
         >
-          <FontAwesomeIcon icon={faChevronRight} size={16} color="#9184d9" />
+          <FontAwesomeIcon icon={faChevronRight} size={16} color={colors.accent} />
         </TouchableOpacity>
       </View>
 

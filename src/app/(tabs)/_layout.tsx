@@ -1,4 +1,5 @@
 import { Tabs } from 'expo-router';
+import { useTheme } from '@/contexts/theme-context';
 import { FontAwesomeIcon } from '@fortawesome/react-native-fontawesome';
 import {
   faListCheck,
@@ -8,14 +9,15 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 
 export default function TabsLayout() {
+  const { colors } = useTheme();
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#9184d9',
-        tabBarInactiveTintColor: '#666',
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: colors.gray500,
         tabBarStyle: {
-          backgroundColor: '#161826',
-          borderTopColor: '#333',
+          backgroundColor: colors.tabBar,
+          borderTopColor: colors.tabBarBorder,
           borderTopWidth: 1,
         },
         tabBarLabelStyle: {

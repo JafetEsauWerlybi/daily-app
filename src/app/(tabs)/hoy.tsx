@@ -1,3 +1,4 @@
+import { useTheme } from "@/contexts/theme-context";
 import { AddTaskData, AddTaskModal } from "@/components/AddTaskModal";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { TaskDetailsModal } from "@/components/TaskDetailsModal";
@@ -26,6 +27,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function HoyScreen() {
+  const { colors } = useTheme();
   const { user } = useAuth();
   const today = new Date();
   const todayStr = toDateStr(today);
@@ -131,7 +133,7 @@ export default function HoyScreen() {
         edges={["top", "left", "right"]}
       >
         <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" color="#9184d9" />
+          <ActivityIndicator size="large" color={colors.accent} />
         </View>
       </SafeAreaView>
     );
@@ -214,7 +216,7 @@ export default function HoyScreen() {
           <TextInput
             className="flex-1 bg-slate-800 rounded-lg px-3 py-2.5 text-gray-100 text-sm border border-gray-700"
             placeholder="Agrega una nueva tarea..."
-            placeholderTextColor="#666"
+            placeholderTextColor={colors.gray500}
             value={newTaskText}
             onChangeText={setNewTaskText}
             onSubmitEditing={handleQuickAdd}
@@ -224,7 +226,7 @@ export default function HoyScreen() {
             className="w-10 h-10 rounded-full bg-purple-500 justify-center items-center"
             onPress={handlePlusPress}
           >
-            <FontAwesomeIcon icon={faPlus} size={16} color="#fff" />
+            <FontAwesomeIcon icon={faPlus} size={16} color={colors.onAccent} />
           </TouchableOpacity>
         </View>
       </View>

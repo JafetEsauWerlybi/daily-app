@@ -1,3 +1,4 @@
+import { useTheme } from "@/contexts/theme-context";
 import { TaskDetailsModal } from "@/components/TaskDetailsModal";
 import { TaskRow } from "@/components/TaskRow";
 import { useAuth } from "@/contexts/auth-context";
@@ -51,6 +52,7 @@ const MONTHS = [
 ];
 
 export default function TableroScreen() {
+  const { colors } = useTheme();
   useBackHandler("tablero");
   const { user } = useAuth();
 
@@ -105,7 +107,7 @@ export default function TableroScreen() {
         edges={["top", "left", "right"]}
       >
         <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" color="#9184d9" />
+          <ActivityIndicator size="large" color={colors.accent} />
         </View>
       </SafeAreaView>
     );
@@ -137,9 +139,9 @@ export default function TableroScreen() {
           disabled={syncing}
         >
           {syncing ? (
-            <ActivityIndicator size="small" color="#9184d9" />
+            <ActivityIndicator size="small" color={colors.accent} />
           ) : (
-            <FontAwesomeIcon icon={faRotate} size={16} color="#9184d9" />
+            <FontAwesomeIcon icon={faRotate} size={16} color={colors.accent} />
           )}
         </TouchableOpacity>
       </View>
@@ -168,7 +170,7 @@ export default function TableroScreen() {
                   <FontAwesomeIcon
                     icon={isOpen ? faChevronDown : faChevronRight}
                     size={12}
-                    color="#9ca3af"
+                    color={colors.gray400}
                   />
                 </View>
                 <Text

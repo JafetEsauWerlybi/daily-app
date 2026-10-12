@@ -29,7 +29,7 @@ export function CalendarModeSwitch({
           activeOpacity={0.7}
         >
           <Text
-            className={`text-sm ${mode === key ? "text-white" : "text-gray-400"}`}
+            className={`text-sm ${mode === key ? "text-onaccent" : "text-gray-400"}`}
             style={{ fontFamily: "MomoTrustSans-Medium" }}
           >
             {label}

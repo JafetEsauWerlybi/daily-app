@@ -28,7 +28,7 @@ function Indicator({
         }}
       />
       <Text
-        className={`ml-0.5 ${onAccent ? "text-white/80" : "text-gray-500"}`}
+        className={`ml-0.5 ${onAccent ? "text-onaccent/80" : "text-gray-500"}`}
         // fontSize inline: la clase arbitraria `text-[Npx]` no se aplicaba y el
         // número salía al tamaño por defecto, recortado por el contenedor.
         style={{
@@ -85,7 +85,7 @@ export function DayCell({
       >
         {letter && (
           <Text
-            className={`text-xs mb-1 ${selected ? "text-white" : "text-gray-400"}`}
+            className={`text-xs mb-1 ${selected ? "text-onaccent" : "text-gray-400"}`}
             style={{ fontFamily: "MomoTrustSans-Medium" }}
           >
             {letter}
@@ -95,7 +95,7 @@ export function DayCell({
           <Text
             className={
               selected
-                ? "text-white"
+                ? "text-onaccent"
                 : isToday
                   ? "text-purple-400"
                   : "text-gray-100"

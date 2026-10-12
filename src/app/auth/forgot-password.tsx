@@ -1,3 +1,4 @@
+import { useTheme } from "@/contexts/theme-context";
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,6 +10,7 @@ import { useRouter } from 'expo-router';
 type Step = 'email' | 'code' | 'password';
 
 export default function ForgotPasswordScreen() {
+  const { colors } = useTheme();
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState(['', '', '', '', '', '']);
@@ -75,7 +77,7 @@ export default function ForgotPasswordScreen() {
 
   const BackButton = ({ onPress }: { onPress: () => void }) => (
     <TouchableOpacity onPress={onPress} className="w-10 h-10 justify-center mb-5">
-      <FontAwesomeIcon icon={faArrowLeft} size={20} color="#e9e9ed" />
+      <FontAwesomeIcon icon={faArrowLeft} size={20} color={colors.white} />
     </TouchableOpacity>
   );
 
@@ -100,7 +102,7 @@ export default function ForgotPasswordScreen() {
           <TextInput
             className="bg-slate-800 rounded-lg px-3 py-2.5 text-gray-100 text-sm border border-gray-700"
             placeholder="tu@email.com"
-            placeholderTextColor="#999"
+            placeholderTextColor={colors.gray500}
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -117,9 +119,9 @@ export default function ForgotPasswordScreen() {
           disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={colors.onAccent} />
           ) : (
-            <Text className="text-white text-base" style={{ fontFamily: 'MomoTrustSans-SemiBold' }}>
+            <Text className="text-onaccent text-base" style={{ fontFamily: 'MomoTrustSans-SemiBold' }}>
               Enviar código
             </Text>
           )}
@@ -148,7 +150,7 @@ export default function ForgotPasswordScreen() {
               key={index}
               className="w-[14%] h-12 bg-slate-800 rounded-lg text-center text-lg text-gray-100 border border-gray-700"
               placeholder="0"
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.gray500}
               maxLength={1}
               value={digit}
               onChangeText={(text) => {
@@ -169,7 +171,7 @@ export default function ForgotPasswordScreen() {
           onPress={handleVerifyCode}
           disabled={loading}
         >
-          <Text className="text-white text-base" style={{ fontFamily: 'MomoTrustSans-SemiBold' }}>
+          <Text className="text-onaccent text-base" style={{ fontFamily: 'MomoTrustSans-SemiBold' }}>
             Verificar código
           </Text>
         </TouchableOpacity>
@@ -206,7 +208,7 @@ export default function ForgotPasswordScreen() {
         <TextInput
           className="bg-slate-800 rounded-lg px-3 py-2.5 text-gray-100 text-sm border border-gray-700"
           placeholder="••••••••"
-          placeholderTextColor="#999"
+          placeholderTextColor={colors.gray500}
           value={newPassword}
           onChangeText={setNewPassword}
           secureTextEntry
@@ -222,7 +224,7 @@ export default function ForgotPasswordScreen() {
         <TextInput
           className="bg-slate-800 rounded-lg px-3 py-2.5 text-gray-100 text-sm border border-gray-700"
           placeholder="••••••••"
-          placeholderTextColor="#999"
+          placeholderTextColor={colors.gray500}
           value={confirmPassword}
           onChangeText={setConfirmPassword}
           secureTextEntry
@@ -242,9 +244,9 @@ export default function ForgotPasswordScreen() {
         disabled={loading}
       >
         {loading ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={colors.onAccent} />
         ) : (
-          <Text className="text-white text-base" style={{ fontFamily: 'MomoTrustSans-SemiBold' }}>
+          <Text className="text-onaccent text-base" style={{ fontFamily: 'MomoTrustSans-SemiBold' }}>
             Cambiar contraseña
           </Text>
         )}

@@ -1,3 +1,4 @@
+import { useTheme } from "@/contexts/theme-context";
 import React, { useEffect, useRef } from 'react';
 import { Modal, View, Text, TouchableOpacity, Animated, TouchableWithoutFeedback } from 'react-native';
 import { FontAwesomeIcon } from '@fortawesome/react-native-fontawesome';
@@ -25,6 +26,7 @@ export function ConfirmModal({
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
+  const { colors } = useTheme();
   const scale = useRef(new Animated.Value(0.85)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -50,7 +52,7 @@ export function ConfirmModal({
               className="w-full bg-slate-900 rounded-2xl border border-gray-700 px-6 py-6 items-center"
             >
               <View className="w-14 h-14 rounded-full bg-purple-500/20 justify-center items-center mb-4">
-                <FontAwesomeIcon icon={icon} size={22} color="#9184d9" />
+                <FontAwesomeIcon icon={icon} size={22} color={colors.accent} />
               </View>
 
               <Text
@@ -83,7 +85,7 @@ export function ConfirmModal({
                   onPress={onConfirm}
                 >
                   <Text
-                    className="text-white text-sm"
+                    className="text-onaccent text-sm"
                     style={{ fontFamily: 'MomoTrustSans-SemiBold' }}
                   >
                     {confirmText}

@@ -45,7 +45,7 @@ export function Toast({ message, type, visible, onHide, duration = 3000 }: Toast
       style={{ opacity, zIndex: 9999 }}
     >
       <FontAwesomeIcon icon={icon} size={20} color="#fff" />
-      <Text className="text-white flex-1 ml-3" style={{ fontFamily: "MomoTrustSans-SemiBold" }}>
+      <Text className="text-pure flex-1 ml-3" style={{ fontFamily: "MomoTrustSans-SemiBold" }}>
         {message}
       </Text>
     </Animated.View>

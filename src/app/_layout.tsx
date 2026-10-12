@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { DarkTheme, ThemeProvider } from 'expo-router';
+import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -10,8 +10,47 @@ import '@/global.css';
 import { AuthProvider } from '@/contexts/auth-context';
 import { LoadingProvider } from '@/contexts/loading-context';
 import { NavigationHistoryProvider } from '@/contexts/navigation-history-context';
+import { AppThemeProvider, useTheme } from '@/contexts/theme-context';
 
 SplashScreen.preventAutoHideAsync();
+
+// Navegación y barra de estado según el tema elegido (claro/oscuro + acento).
+function ThemedStack() {
+  const { isLight, colors } = useTheme();
+  const base = isLight ? DefaultTheme : DarkTheme;
+  const navTheme = {
+    ...base,
+    colors: {
+      ...base.colors,
+      background: colors.slate950,
+      card: colors.tabBar,
+      text: colors.white,
+      border: colors.tabBarBorder,
+      primary: colors.accent,
+    },
+  };
+
+  return (
+    <ThemeProvider value={navTheme}>
+      <StatusBar
+        style={isLight ? 'dark' : 'light'}
+        translucent
+        backgroundColor="transparent"
+      />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animationEnabled: true,
+        }}
+      >
+        <Stack.Screen name="index" />
+        <Stack.Screen name="auth" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="apariencia" />
+      </Stack>
+    </ThemeProvider>
+  );
+}
 
 export default function RootLayout() {
   useEffect(() => {
@@ -35,25 +74,15 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <LoadingProvider>
-        <AuthProvider>
-          <NavigationHistoryProvider>
-            <ThemeProvider value={DarkTheme}>
-              <StatusBar style="light" translucent backgroundColor="transparent" />
-              <Stack
-                screenOptions={{
-                  headerShown: false,
-                  animationEnabled: true,
-                }}
-              >
-                <Stack.Screen name="index" />
-                <Stack.Screen name="auth" />
-                <Stack.Screen name="(tabs)" />
-              </Stack>
-            </ThemeProvider>
-          </NavigationHistoryProvider>
-        </AuthProvider>
-      </LoadingProvider>
+      <AppThemeProvider>
+        <LoadingProvider>
+          <AuthProvider>
+            <NavigationHistoryProvider>
+              <ThemedStack />
+            </NavigationHistoryProvider>
+          </AuthProvider>
+        </LoadingProvider>
+      </AppThemeProvider>
     </SafeAreaProvider>
   );
 }

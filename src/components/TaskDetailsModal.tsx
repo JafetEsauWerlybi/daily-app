@@ -153,7 +153,7 @@ export function TaskDetailsModal({
             style={{ backgroundColor: color }}
           >
             <Text
-              className="text-[11px] text-white"
+              className="text-[11px] text-pure"
               style={{ fontFamily: "MomoTrustSans-Medium" }}
             >
               {shown.category}
@@ -211,7 +211,7 @@ export function TaskDetailsModal({
                     <Text
                       className={
                         selected
-                          ? "text-white text-xs"
+                          ? "text-onaccent text-xs"
                           : "text-gray-400 text-xs"
                       }
                       style={{ fontFamily: "MomoTrustSans-Medium" }}

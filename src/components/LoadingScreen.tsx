@@ -1,3 +1,4 @@
+import { useTheme } from "@/contexts/theme-context";
 import React, { useEffect, useState } from "react";
 import { View, Animated, Text } from "react-native";
 import { FontAwesomeIcon } from "@fortawesome/react-native-fontawesome";
@@ -8,6 +9,7 @@ interface LoadingScreenProps {
 }
 
 export function LoadingScreen({ visible }: LoadingScreenProps) {
+  const { colors } = useTheme();
   const [opacity] = useState(new Animated.Value(0));
   const [rotation] = useState(new Animated.Value(0));
   const [textOpacity] = useState(new Animated.Value(0.5));
@@ -78,7 +80,7 @@ export function LoadingScreen({ visible }: LoadingScreenProps) {
           transform: [{ rotate: rotateInterpolate }],
         }}
       >
-        <FontAwesomeIcon icon={faSpinner} size={48} color="#a78bfa" />
+        <FontAwesomeIcon icon={faSpinner} size={48} color={colors.accent} />
       </Animated.View>
 
       <Animated.View

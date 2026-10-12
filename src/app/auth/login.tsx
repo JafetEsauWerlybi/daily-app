@@ -1,3 +1,4 @@
+import { useTheme } from "@/contexts/theme-context";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -19,6 +20,7 @@ import { useLoading } from "@/contexts/loading-context";
 import { useRouter } from "expo-router";
 
 export default function LoginScreen() {
+  const { colors } = useTheme();
   const router = useRouter();
   const { user } = useAuth();
   const { hide: hideLoading } = useLoading();
@@ -105,7 +107,7 @@ export default function LoginScreen() {
             <TextInput
               className="bg-slate-800 rounded-lg px-3 py-2 text-gray-100 text-sm border border-gray-700"
               placeholder="tu@email.com"
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.gray500}
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -125,7 +127,7 @@ export default function LoginScreen() {
               <TextInput
                 className="flex-1 py-2 text-gray-100 text-sm"
                 placeholder="••••••••"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.gray500}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
@@ -139,7 +141,7 @@ export default function LoginScreen() {
                 <FontAwesomeIcon
                   icon={showPassword ? faEyeSlash : faEye}
                   size={16}
-                  color="#9184d9"
+                  color={colors.accent}
                 />
               </TouchableOpacity>
             </View>
@@ -155,10 +157,10 @@ export default function LoginScreen() {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={colors.onAccent} />
             ) : (
               <Text
-                className="text-white text-sm"
+                className="text-onaccent text-sm"
                 style={{ fontFamily: "MomoTrustSans-SemiBold" }}
               >
                 Iniciar sesión
@@ -186,7 +188,7 @@ export default function LoginScreen() {
           {/* Google Icon Button */}
           <View className="flex-row justify-center">
             <TouchableOpacity className="w-11 h-11 rounded-lg bg-slate-800 border border-gray-700 justify-center items-center">
-              <FontAwesomeIcon icon={faGoogle} size={20} color="#9184d9" />
+              <FontAwesomeIcon icon={faGoogle} size={20} color={colors.accent} />
             </TouchableOpacity>
           </View>
         </View>

@@ -166,6 +166,23 @@ Se usa `@quidone/react-native-wheel-picker` (`DatePicker` para fecha, `WheelPick
 - **No usar clases arbitrarias de NativeWind para tamaño de fuente** (`text-[7px]`, `text-[5px]`…): no se aplican y el texto sale al tamaño por defecto. Usar `style={{ fontSize }}` (con `lineHeight`) como en `COUNT_FONT_SIZE` de `DayCell.tsx`. Los valores arbitrarios de espaciado sí funcionaron (`py-[19px]`).
 - **No poner `flex-1` en el contenedor interno de una celda de alto automático:** su alto base pasa a 0, queda en el `minHeight` y el contenido (los conteos) se sale del fondo de color. Dejar que el contenedor mida lo que mide su contenido.
 
+### 10. **Apariencia (tema claro/oscuro + color de acento)**
+**Qué hay:** pantalla `src/app/apariencia.tsx` (ruta de stack en raíz, se abre desde Perfil → Apariencia): selector Oscuro/Claro, rueda de color (`ColorWheel`, SVG + `PanResponder`, sin librerías nuevas), vista previa y "Restablecer valores". Se guarda **solo en el dispositivo** (AsyncStorage, clave `daily.appearance.v1`, `{mode, accent}`), no en Firestore.
+
+**Cómo funciona (no cambiar clase por clase):**
+- `tailwind.config.ts` remapea los colores que ya usaba la app (`slate-950/900/800`, `gray-100…800`, `white`, `purple-400/500`) a variables CSS `--c-*` (`rgb(var(--c-x) / <alpha-value>)`). Las clases existentes cambian solas con el tema. Defaults (oscuro) en `src/global.css`.
+- `src/lib/theme.ts` (`buildTheme(mode, accent)`) define las paletas oscura/clara y deriva del acento: `accent` (= `purple-500`), `accentText` (= `purple-400`, más claro en oscuro / más oscuro en claro), `onAccent` (blanco u oscuro según luminancia) y `accentSoft`.
+- `src/contexts/theme-context.tsx` (`AppThemeProvider`, `useTheme()`): carga/guarda la preferencia, aplica `vars(theme.vars)` de `nativewind` en un `View` raíz y no pinta nada hasta leer AsyncStorage (evita destello). `_layout.tsx` usa `useTheme` para `StatusBar` y el tema de navegación.
+- Para colores que no pasan por clases (iconos, `placeholderTextColor`, `ActivityIndicator`, tab bar, estilos del wheel picker) usar `const { colors } = useTheme()` — **no hardcodear hex**.
+- Clases nuevas: `text-onaccent` / `bg-…` para texto **sobre fondo de acento** (botones, día seleccionado, ✓ de checkbox); `text-pure` = blanco fijo para texto sobre colores que no cambian (etiquetas de categoría, toast). `text-white` es el texto principal y en claro es casi negro.
+
+**Valor por defecto:** acento `#a855f7` (el `bg-purple-500` real de Tailwind que ya se veía). Los iconos que antes usaban `#9184d9` ahora usan el acento.
+
+**No repetir:**
+- No volver a poner `text-white` sobre un fondo de acento: en claro quedaría oscuro sobre oscuro/claro según el acento; usar `text-onaccent`.
+- No agregar hex fijos de fondo/texto en componentes nuevos; usar las clases remapeadas o `useTheme().colors`.
+- Cambios en `tailwind.config.ts`/`global.css` requieren reiniciar Metro con caché limpia (`npx expo start -c`).
+
 ---
 
 ## 🎨 Estilos & Tipografía (HOMOLOGACIÓN REQUERIDA)
@@ -192,7 +209,7 @@ await Font.loadAsync({
 - **Usar:** clases Tailwind de NativeWind (bg-slate-950, text-gray-300, border-gray-700, etc.)
 - **Acento:** #9184d9 (purple-500 en Tailwind)
 - **Fondo principal:** #161826 (slate-950)
-- **NO usar:** custom tailwind config colors (no funciona reliablemente en RN); usar colores estándar Tailwind
+- **Colores de tema:** los nombres estándar de Tailwind que usa la app están remapeados a variables del tema (ver sección 10); los valores de abajo son los del tema oscuro por defecto. Fondo real de pantallas = `slate-950` de Tailwind (`#020617`); `#161826` solo es la tab bar.
 
 **Paleta:**
 ```
@@ -289,10 +306,12 @@ src/
 │   │   ├── login.tsx
 │   │   ├── register.tsx
 │   │   └── forgot-password.tsx  (3 steps: email → code → password)
+│   ├── apariencia.tsx           (Tema claro/oscuro + rueda de color de acento; ver sección 10)
 │   └── explore.tsx              (Template - puede deletarse)
 ├── components/
 │   ├── ConfirmModal.tsx
 │   ├── LoadingScreen.tsx
+│   ├── ColorWheel.tsx           (Rueda de color SVG + PanResponder, usada en Apariencia)
 │   ├── AddTaskModal.tsx         (Overlay View + wheel pickers, ver sección "Add Task Modal")
 │   ├── TaskDetailsModal.tsx     (Detalle de solo lectura de una ocurrencia; mismo patrón de overlay)
 │   ├── TaskRow.tsx              (Fila compartida Hoy/Tablero/Calendario: círculo + título + chips; estados completed/pending/missed)
@@ -304,6 +323,7 @@ src/
 ├── contexts/
 │   ├── auth-context.tsx         (onAuthStateChanged, login, register, logout)
 │   ├── loading-context.tsx      (Global spinner overlay)
+│   ├── theme-context.tsx        (AppThemeProvider/useTheme: modo + acento, AsyncStorage, vars de NativeWind)
 │   └── navigation-history-context.tsx  (Historial de tabs)
 ├── hooks/
 │   ├── use-back-handler.ts      (useFocusEffect + BackHandler)
@@ -311,6 +331,7 @@ src/
 │   ├── use-task-logs.ts         (Logs de cumplimiento por rango de fechas: isCompleted/setCompleted/refresh)
 │   └── [otros hooks...]
 ├── lib/
+│   ├── theme.ts                 (Paletas claro/oscuro, buildTheme, utilidades hex/hsv)
 │   ├── firebase.ts              (initializeAuth con AsyncStorage)
 │   └── task-schedule.ts         (isTaskForDate, getWeekDays, getMonthGrid, countDay, countTasksInMonth, addDays, getOccurrenceStatus, logId, toDateStr)
 ├── types/
@@ -407,7 +428,7 @@ module.exports = withNativeWind(config, { input: './src/global.css' });
 2. **Verificar en dispositivo real** — los fixes de performance/timezone del Add Task Modal (`T00:00:00`, precalentamiento de `Intl`) y todo lo de Hoy/Tablero/logs se validó por lectura de código + `tsc`, no en el Samsung A15 físico
 3. **Mostrar errores de Firestore en UI** — `use-tasks` y `use-task-logs` guardan `error` pero ninguna pantalla lo muestra
 4. **Unificar `MONTHS`/`DAY_NAMES`** — Tablero y Hoy aún tienen su propia copia; usar `src/constants/dates.ts`
-5. **Implementar Profile sub-screens** — Notificaciones, Apariencia, Cuenta, Privacidad, Ayuda
+5. **Implementar Profile sub-screens** — Notificaciones, Cuenta, Privacidad, Ayuda (Apariencia ya está, sección 10)
 6. **OAuth Google & Apple** — Botones de login ya existen, falta integración
    - **Recuperar contraseña (`forgot-password.tsx`)** — los pasos "verificar código" y "cambiar contraseña" tienen `TODO` y no llaman a Firebase (el segundo solo simula con `setTimeout`); es solo UI
 7. **Programar notificación local real** para la hora seleccionada en Add Task (hoy solo se guarda el campo `time`, no se agenda con `expo-notifications`)
@@ -456,6 +477,7 @@ npx tsc --noEmit
 ✅ Calendario, vista Mes: cuadrícula + lista del día en un solo `ScrollView` vertical (sección 9)
 ✅ Calendario (Semana y Mes): el detalle de tarea muestra acciones en hoy y días futuros: Finalizar hoy, Cerrar este día, Eliminar tarea y Marcar/Quitar como completada, con confirmación (sección 9). `use-tasks` expone `updateTaskEnd` y `deleteTask` borra también los logs
 ✅ Add Task Modal: abre con una sola fecha; el checkbox "¿Tarea recurrente?" muestra Fin y "Días que se realizará"; con 1 solo día marcado, ese día sigue al weekday de la fecha de inicio (sección 8)
+✅ Perfil → Apariencia: tema claro/oscuro + color de acento con rueda, guardado en AsyncStorage (sección 10). Sin probar en dispositivo; hace falta `npx expo start -c`
 ✅ Docs corregidas: comentario de `DayCell`, fila de `@gorhom` y pendiente de "Recuperar contraseña"
 
 **Pendiente inmediato:** las **reglas de Firestore** para `users/{uid}/taskLogs` (sin ellas puede fallar al guardar; el error solo queda en `error` del hook, no se muestra en UI) y validar Fin ≥ Inicio en el modal. El Calendario sí se ha ido viendo en el celular durante los ajustes de estilo, pero el guardado/lectura de logs y los fixes anteriores del modal siguen sin confirmarse en el Samsung A15.
