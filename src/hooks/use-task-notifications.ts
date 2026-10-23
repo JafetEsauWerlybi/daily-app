@@ -10,12 +10,14 @@ export function useTaskNotifications(
   userId: string | undefined,
   tasks: Task[],
   loading: boolean,
+  enabled: boolean,
 ) {
   // Avisar del permiso denegado una sola vez por sesión.
   const warnedDenied = useRef(false);
 
   useEffect(() => {
-    if (!userId) {
+    // Sin sesión o con las notificaciones apagadas en Ajustes: nada programado.
+    if (!userId || !enabled) {
       cancelTaskNotifications().catch(() => {});
       return;
     }
@@ -43,5 +45,5 @@ export function useTaskNotifications(
       if (state === "active") run();
     });
     return () => sub.remove();
-  }, [userId, tasks, loading]);
+  }, [userId, tasks, loading, enabled]);
 }

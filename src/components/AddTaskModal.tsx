@@ -1,4 +1,5 @@
 import { CATEGORY_COLORS, TASK_CATEGORIES } from "@/constants/categories";
+import { useNotificationSettings } from "@/contexts/notification-settings-context";
 import { useTheme } from "@/contexts/theme-context";
 import { TaskCategory } from "@/types/task";
 import WheelPicker, { DatePicker } from "@quidone/react-native-wheel-picker";
@@ -32,8 +33,6 @@ function toDateStr(date: Date): string {
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
-
-const DEFAULT_NOTIFY_TIME = "08:00";
 
 // Vigencia por defecto: de hoy a un año después.
 function defaultRange(): { start: string; end: string } {
@@ -92,6 +91,7 @@ export function AddTaskModal({
 }: AddTaskModalProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { defaultTime } = useNotificationSettings();
   // Estilos del wheel: la librería no acepta clases, así que salen del tema.
   const pickerItemTextStyle = {
     color: colors.white,
@@ -276,7 +276,7 @@ export function AddTaskModal({
       return;
     }
     setNotify(true);
-    if (!time) setTime(DEFAULT_NOTIFY_TIME);
+    if (!time) setTime(defaultTime);
     revealTimePicker();
   };
 

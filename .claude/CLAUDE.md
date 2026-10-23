@@ -21,6 +21,7 @@ StatusBar: expo-status-bar (para manejo transparente de barra de estado)
 WheelPicker: @quidone/react-native-wheel-picker (incluye código nativo opcional en el paquete, pero funciona sin rebuild nativo vía Expo Go — usado para date/time pickers tipo rueda)
 Notificaciones: expo-notifications ~57.0.24 (locales; NO funciona en Expo Go de Android, ver sección 11)
 Dev build: expo-dev-client ~57.0.20 + EAS Build (eas.json con perfiles development/preview/production)
+Google Sign-In: @react-native-google-signin/google-signin ^16 (nativo, solo en dev build; idToken → Firebase signInWithCredential)
 ```
 
 **Entorno de ejecución: development build, ya NO Expo Go.** Desde que se agregó `expo-notifications` la app se corre con un APK de desarrollo (compilado con EAS, ver "Comandos Útiles"), no con Expo Go. Se sigue usando `npx expo start` y Fast Refresh igual; solo hay que recompilar el APK cuando cambian dependencias nativas, plugins o permisos de `app.json`, o la versión de Expo/RN. Mucha documentación de abajo menciona "Expo Go" por haberse escrito antes; el comportamiento de JS descrito sigue vigente.
@@ -208,6 +209,23 @@ Se usa `@quidone/react-native-wheel-picker` (`DatePicker` para fecha, `WheelPick
 - Add Task Modal valida Fin ≥ Inicio (`endBeforeStart`): borde rojo en Fin, mensaje y "Guardar" deshabilitado; `handleSave` también lo verifica.
 - Reglas de Firestore: `FIRESTORE_RULES.md`. **`users/{uid}` no cubre sus subcolecciones**, por eso `users/{uid}/taskLogs` lleva su propio `match`; `tasks` tiene `update` que impide cambiar `userId`.
 
+### 13. **Sub-pantallas de Perfil**
+Rutas de stack en raíz (`src/app/notificaciones.tsx`, `cuenta.tsx`, `privacidad.tsx`, `ayuda.tsx`, junto a `apariencia.tsx`), registradas en `_layout.tsx` y abiertas desde `MENU_ITEMS` de `perfil.tsx` (`route: Href`). Comparten `ScreenHeader` (flecha + título).
+- **Notificaciones:** `NotificationSettingsProvider` (`contexts/notification-settings-context.tsx`, AsyncStorage `daily.notifications.v1`, `{enabled, defaultTime}`) montado dentro de `AuthProvider`. `enabled=false` → `useTaskNotifications` cancela todo. `defaultTime` reemplaza el `08:00` fijo de `AddTaskModal`. La pantalla muestra el permiso del sistema (`getNotificationPermission`/`requestNotificationPermission`, "Abrir ajustes" si está bloqueado) y `sendTestNotification` (5 s). El wheel de hora se monta solo al abrirse (render condicional, nunca dentro de `display:none`).
+- **Cuenta:** `auth-context` expone `updateDisplayName` (`updateProfile` + `users/{uid}.name`), `changePassword` (reautentica con la contraseña actual) y `hasPassword` (provider `password`). `updateProfile` muta el mismo `user`, por eso un contador interno fuerza el re-render. Cuentas de Google no ven el formulario de contraseña. `register` ahora también guarda `displayName`.
+- **Privacidad y Ayuda:** informativas (FAQ en acordeón, versión de `expo-constants`).
+- **Olvidé mi contraseña** (`auth/forgot-password.tsx`): ahora **un solo paso** (correo → `sendPasswordResetEmail`, pantalla de éxito, reenvío con espera de 30 s). Firebase no ofrece flujo de código de 6 dígitos desde el cliente; no volver a ese diseño.
+
+### 14. **Google OAuth (development build)**
+- `src/lib/google-auth.ts`: `signInWithGoogle()` (configura con `webClientId`, `hasPlayServices`, `signIn`, `GoogleAuthProvider.credential(idToken)`, `signInWithCredential`); devuelve `"success" | "cancelled"`. Carga la librería con `require` en `try/catch` (no existe en Expo Go). `auth-context.loginWithGoogle` crea `users/{uid}` solo si no existe; `logout` también cierra la sesión de Google.
+- El **Web client ID** vive en `app.json → expo.extra.googleWebClientId` (no en `.env`: EAS no sube archivos ignorados por git). No es secreto.
+- Configuración externa que ya está hecha: Google habilitado en Firebase Auth; app Android `com.daily.app` registrada en Firebase con el **SHA-1 del keystore de EAS** (`npx eas-cli credentials`, las credenciales por defecto se comparten entre perfiles). No se usa `google-services.json`.
+- **Pendiente al publicar en Play Store:** agregar también el SHA-1 de la firma de Google Play (App Signing), si no, Google Sign-In falla en la versión publicada.
+- Solo el login tiene botón de Google; entrar con Google ya crea la cuenta.
+
+### 15. **Ícono de la app**
+Fuente: SVG del usuario (calendario morado `#8B5CF6` sobre negro, insignia verde con palomita). Se generaron con `sharp` (instalado en una carpeta temporal, no en el proyecto): `icon.png` 1024 sin esquinas redondeadas, `android-icon-foreground.png` (transparente, dentro de la zona segura), `android-icon-background.png` (negro), `android-icon-monochrome.png` (recortes en los días), `favicon.png` y `splash-icon.png`. `app.json`: `adaptiveIcon.backgroundColor` `#000000` + `monochromeImage`. El ícono de iOS (`assets/expo.icon`) sigue siendo el de la plantilla. Cambiar el ícono requiere nuevo APK.
+
 ---
 
 ## 🎨 Estilos & Tipografía (HOMOLOGACIÓN REQUERIDA)
@@ -332,6 +350,7 @@ src/
 │   │   ├── register.tsx
 │   │   └── forgot-password.tsx  (3 steps: email → code → password)
 │   ├── apariencia.tsx           (Tema claro/oscuro + rueda de color de acento; ver sección 10)
+│   ├── notificaciones.tsx / cuenta.tsx / privacidad.tsx / ayuda.tsx  (Sub-pantallas de Perfil, sección 13)
 │   └── explore.tsx              (Template - puede deletarse)
 ├── components/
 │   ├── ConfirmModal.tsx
@@ -341,6 +360,7 @@ src/
 │   ├── TaskDetailsModal.tsx     (Detalle de solo lectura de una ocurrencia; mismo patrón de overlay)
 │   ├── TaskRow.tsx              (Fila compartida Hoy/Tablero/Calendario: círculo + título + chips; estados completed/pending/missed)
 │   ├── ErrorBanner.tsx          (Aviso rojo cerrable para errores de Firestore, ver sección 12)
+│   ├── ScreenHeader.tsx         (Flecha + título de las sub-pantallas de Perfil, sección 13)
 │   ├── NotificationSync.tsx     (Sin UI; mantiene las notificaciones locales al día, ver sección 11)
 │   ├── calendar/                (CalendarModeSwitch, WeekStrip, MonthGrid, YearGrid, DayCell, DayTaskList)
 │   └── [otros componentes...]
@@ -350,6 +370,7 @@ src/
 ├── contexts/
 │   ├── auth-context.tsx         (onAuthStateChanged, login, register, logout)
 │   ├── loading-context.tsx      (Global spinner overlay)
+│   ├── notification-settings-context.tsx (enabled + hora sugerida, AsyncStorage)
 │   ├── theme-context.tsx        (AppThemeProvider/useTheme: modo + acento, AsyncStorage, vars de NativeWind)
 │   └── navigation-history-context.tsx  (Historial de tabs)
 ├── hooks/
@@ -362,6 +383,7 @@ src/
 │   ├── theme.ts                 (Paletas claro/oscuro, buildTheme, utilidades hex/hsv)
 │   ├── firebase.ts              (initializeAuth con AsyncStorage)
 │   ├── firestore-error.ts       (describeFirestoreError: códigos de Firestore → mensajes en español)
+│   ├── google-auth.ts           (signInWithGoogle/signOutFromGoogle, carga tolerante, sección 14)
 │   ├── notifications.ts         (Carga tolerante de expo-notifications, canal, permisos, syncTaskNotifications/cancelTaskNotifications)
 │   └── task-schedule.ts         (isTaskForDate, getWeekDays, getMonthGrid, countDay, countTasksInMonth, addDays, getOccurrenceStatus, logId, toDateStr)
 ├── types/
@@ -439,6 +461,8 @@ module.exports = withNativeWind(config, { input: './src/global.css' });
 | App entera falla con `Cannot find native module 'ExpoTopicSubscriptionModule'` | `import "expo-notifications"` lanza en Expo Go de Android (SDK 53+) y se importaba al arrancar | `require` en `try/catch` en `lib/notifications.ts` + development build con EAS | No usar import estático de `expo-notifications` en el arranque; Expo Go no sirve para notificaciones |
 | Nunca pidió permiso de notificaciones ni avisó nada | El módulo ni cargaba (fila anterior) y los fallos de sync solo iban a `console.warn` | Logs `[notif]` y `Alert` si el permiso está denegado | No dejar fallos de funciones en segundo plano sin rastro visible |
 | `expo install <paquete>` subió muchos paquetes | Alinea todo el SDK 57 a sus últimos parches (expo 57.0.21 → 57.0.31, etc.) | Revisar `git diff package.json` tras cada `expo install` | No asumir que instalar un paquete solo agrega ese paquete |
+| Google Sign-In falla con `DEVELOPER_ERROR` / config | Falta la app Android o el SHA-1 del keystore en Firebase, o `googleWebClientId` vacío | App `com.daily.app` + SHA-1 de `eas credentials` en Firebase; Web client ID en `app.json → extra` | No usar `.env` para el client ID (EAS no sube archivos ignorados); al publicar agregar el SHA-1 de Play App Signing |
+| Flujo "código de 6 dígitos" para recuperar contraseña | Firebase solo envía enlace por correo desde el cliente | Un solo paso con `sendPasswordResetEmail` | No reintroducir pasos de código/nueva contraseña dentro de la app |
 | Tareas/logs no se guardan o no se leen (silencioso) | Las reglas de `users/{uid}` no cubren la subcolección `taskLogs` | `match /taskLogs/{logId}` explícito (ver `FIRESTORE_RULES.md`) | Las reglas de un documento no bajan a sus subcolecciones |
 
 ---
@@ -458,12 +482,11 @@ module.exports = withNativeWind(config, { input: './src/global.css' });
 
 ## 🚀 Próximos Pasos Pendientes
 
-1. **Pulir notificaciones locales** — no avisar de tareas ya completadas hoy (requiere logs) y abrir la tarea al tocar la notificación (`data.taskId`); quitar o bajar de nivel los `console.log("[notif]…")` de diagnóstico en `lib/notifications.ts` cuando se confirme que todo va bien
-2. **Verificar en dispositivo real** — notificaciones (permiso, canal, que lleguen a la hora), Apariencia, guardado/lectura de logs y los fixes del Add Task Modal se validaron por código + `tsc`; el usuario confirmó los cambios de errores/validación/reglas en el dev build, pero no hay prueba escrita de cada flujo
+1. **Pulir notificaciones locales** — no avisar de tareas ya completadas hoy (requiere logs) y abrir la tarea al tocar la notificación (`data.taskId`). Las notificaciones ya llegan en el dev build y los logs `[notif]` de diagnóstico ya se quitaron
+2. **Verificar en dispositivo real** — el usuario confirmó en el dev build: notificaciones, Perfil (4 sub-pantallas), Google Sign-In y recuperar contraseña. Sin confirmar explícitamente: Apariencia y los fixes de wheel/timezone del Add Task Modal
 3. **Unificar `MONTHS`/`DAY_NAMES`** — Tablero y Hoy aún tienen su propia copia; usar `src/constants/dates.ts`
-4. **Implementar Profile sub-screens** — Notificaciones (activar/desactivar, hora por defecto), Cuenta, Privacidad, Ayuda (Apariencia ya está, sección 10)
-5. **OAuth Google & Apple** — Botones de login ya existen, falta integración
-   - **Recuperar contraseña (`forgot-password.tsx`)** — los pasos "verificar código" y "cambiar contraseña" tienen `TODO` y no llaman a Firebase (el segundo solo simula con `setTimeout`); es solo UI
+4. **Perfil: lo que falta** — eliminar cuenta/datos (Cuenta/Privacidad) y contacto de soporte en Ayuda; botón de Google también en Registro
+5. **OAuth Apple** (iOS) — Google ya está (sección 14)
 6. **Firebase Cloud Messaging** — Push notifications (necesita el dev build, no Expo Go)
 7. **Build de uso diario** — el APK `development` depende de Metro en la PC; para usarla sin PC compilar `preview` (o `production` cuando toque publicar)
 8. **Testing en dispositivos reales** — Verificar en iOS físico (Android ya se corre en dev build)
@@ -511,13 +534,16 @@ npx tsc --noEmit
 ✅ Errores de Firestore visibles: `ErrorBanner` en Hoy/Tablero/Calendario + mensajes en español + `clearError` en los hooks (sección 12)
 ✅ `FIRESTORE_RULES.md` corregido: regla explícita para `users/{uid}/taskLogs`, `update`/`delete` en `tasks`
 ✅ Notificaciones locales: ventana de 14 días con triggers de fecha, sincronizadas al cambiar tareas y al volver a primer plano; cancelación al cerrar sesión (sección 11)
-✅ Se descubrió que Expo Go de Android no soporta `expo-notifications`; se hizo la carga tolerante y se migró a **development build con EAS** (`eas.json`, `expo-dev-client`). El usuario ya instaló el APK y la app corre ("ya jaló")
+✅ Se descubrió que Expo Go de Android no soporta `expo-notifications`; se hizo la carga tolerante y se migró a **development build con EAS** (`eas.json`, `expo-dev-client`). Las notificaciones llegan en el APK
+✅ Perfil: Notificaciones (ajustes + prueba), Cuenta (nombre y contraseña), Privacidad y Ayuda (sección 13)
+✅ Recuperar contraseña real con enlace por correo (un solo paso)
+✅ Google Sign-In con Firebase en el dev build (sección 14); ícono de la app desde el SVG del usuario (sección 15)
 
-**Pendiente inmediato:** confirmar en el dev build que el permiso se pide y que la notificación llega a la hora; luego pulirlas (no avisar de completadas, abrir la tarea al tocar). Quitar los `console.log("[notif]…")` de diagnóstico cuando todo esté confirmado.
+**Pendiente inmediato:** pulir notificaciones (no avisar de completadas, abrir la tarea al tocar).
 
 **Ojo:** `npx expo install` subió los parches de todo el SDK 57 (revisar `package.json` al commitear). El APK `development` necesita Metro corriendo; para uso diario sin PC compilar `preview`.
 
-**Próxima sesión:** pulir notificaciones, luego Perfil (sub-pantallas, empezando por Notificaciones) y recuperar contraseña real.
+**Próxima sesión:** pulir notificaciones, luego un build `preview` para uso diario sin PC, y los pendientes de Perfil (eliminar cuenta) / Apple.
 
 ---
 

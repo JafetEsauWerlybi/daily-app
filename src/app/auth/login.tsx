@@ -31,7 +31,8 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   // Escuchar cambios en user para redirigir cuando esté autenticado
   useEffect(() => {
@@ -66,6 +67,20 @@ export default function LoginScreen() {
       setError(errorMsg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    setError("");
+    try {
+      const result = await loginWithGoogle();
+      // El cambio de user dispara la redirección (efecto de arriba).
+      if (result === "success") showLoading();
+    } catch (err: any) {
+      setError(err?.message || "No se pudo iniciar sesión con Google");
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -187,8 +202,18 @@ export default function LoginScreen() {
 
           {/* Google Icon Button */}
           <View className="flex-row justify-center">
-            <TouchableOpacity className="w-11 h-11 rounded-lg bg-slate-800 border border-gray-700 justify-center items-center">
-              <FontAwesomeIcon icon={faGoogle} size={20} color={colors.accent} />
+            <TouchableOpacity
+              className={`w-11 h-11 rounded-lg bg-slate-800 border border-gray-700 justify-center items-center ${
+                googleLoading || loading ? "opacity-60" : ""
+              }`}
+              onPress={handleGoogleLogin}
+              disabled={googleLoading || loading}
+            >
+              {googleLoading ? (
+                <ActivityIndicator size="small" color={colors.accent} />
+              ) : (
+                <FontAwesomeIcon icon={faGoogle} size={20} color={colors.accent} />
+              )}
             </TouchableOpacity>
           </View>
         </View>

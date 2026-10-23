@@ -13,7 +13,7 @@ import {
   faRightFromBracket,
   faChevronRight,
 } from "@fortawesome/free-solid-svg-icons";
-import { useRouter } from "expo-router";
+import { Href, useRouter } from "expo-router";
 import { useAuth } from "@/contexts/auth-context";
 import { useLoading } from "@/contexts/loading-context";
 import { useBackHandler } from "@/hooks/use-back-handler";
@@ -21,13 +21,13 @@ import { useBackHandler } from "@/hooks/use-back-handler";
 const MENU_ITEMS: {
   label: string;
   icon: IconDefinition;
-  route?: "/apariencia";
+  route: Href;
 }[] = [
-  { label: "Notificaciones", icon: faBell },
+  { label: "Notificaciones", icon: faBell, route: "/notificaciones" },
   { label: "Apariencia", icon: faPalette, route: "/apariencia" },
-  { label: "Cuenta", icon: faUserGear },
-  { label: "Privacidad", icon: faShieldHalved },
-  { label: "Ayuda", icon: faCircleQuestion },
+  { label: "Cuenta", icon: faUserGear, route: "/cuenta" },
+  { label: "Privacidad", icon: faShieldHalved, route: "/privacidad" },
+  { label: "Ayuda", icon: faCircleQuestion, route: "/ayuda" },
 ];
 
 export default function PerfilScreen() {
@@ -91,9 +91,7 @@ export default function PerfilScreen() {
             <TouchableOpacity
               key={item.label}
               className="bg-slate-800 rounded-lg px-4 py-3.5 flex-row justify-between items-center"
-              onPress={
-                item.route ? () => router.navigate(item.route!) : undefined
-              }
+              onPress={() => router.navigate(item.route)}
             >
               <View className="flex-row items-center gap-3">
                 <FontAwesomeIcon

@@ -13,7 +13,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#161826",
+        "backgroundColor": "#000000",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png",
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false,
@@ -34,13 +35,15 @@
       ],
       "expo-image",
       "expo-splash-screen",
-      "expo-web-browser"
+      "expo-web-browser",
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
       "router": {},
+      "googleWebClientId": "345898052899-d2ff8uvfj4gkffsdhvvk7bem1oo17ms5.apps.googleusercontent.com",
       "eas": {
         "projectId": "0670b3bf-48af-40ea-9f4f-14e39aac4bd2"
       }

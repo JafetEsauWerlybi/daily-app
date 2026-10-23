@@ -9,6 +9,7 @@ import * as Font from 'expo-font';
 import '@/global.css';
 import { AuthProvider } from '@/contexts/auth-context';
 import { LoadingProvider } from '@/contexts/loading-context';
+import { NotificationSettingsProvider } from '@/contexts/notification-settings-context';
 import { NavigationHistoryProvider } from '@/contexts/navigation-history-context';
 import { AppThemeProvider, useTheme } from '@/contexts/theme-context';
 
@@ -47,6 +48,10 @@ function ThemedStack() {
         <Stack.Screen name="auth" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="apariencia" />
+        <Stack.Screen name="notificaciones" />
+        <Stack.Screen name="cuenta" />
+        <Stack.Screen name="privacidad" />
+        <Stack.Screen name="ayuda" />
       </Stack>
     </ThemeProvider>
   );
@@ -77,9 +82,11 @@ export default function RootLayout() {
       <AppThemeProvider>
         <LoadingProvider>
           <AuthProvider>
-            <NavigationHistoryProvider>
-              <ThemedStack />
-            </NavigationHistoryProvider>
+            <NotificationSettingsProvider>
+              <NavigationHistoryProvider>
+                <ThemedStack />
+              </NavigationHistoryProvider>
+            </NotificationSettingsProvider>
           </AuthProvider>
         </LoadingProvider>
       </AppThemeProvider>

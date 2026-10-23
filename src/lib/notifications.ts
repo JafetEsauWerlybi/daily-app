@@ -48,12 +48,49 @@ async function ensurePermission(N: typeof NotificationsModule): Promise<boolean>
   // En Android 13+ el prompt solo aparece si ya existe un canal.
   await ensureChannel(N);
   const current = await N.getPermissionsAsync();
-  console.log("[notif] permisos actuales:", JSON.stringify(current));
   if (current.granted) return true;
   if (!current.canAskAgain) return false;
   const next = await N.requestPermissionsAsync();
-  console.log("[notif] permisos tras pedir:", JSON.stringify(next));
   return next.granted;
+}
+
+export type PermissionState =
+  | "granted"
+  | "denied"
+  | "undetermined"
+  | "unavailable";
+
+// Estado del permiso del sistema, sin pedirlo.
+export async function getNotificationPermission(): Promise<PermissionState> {
+  if (!Notifications) return "unavailable";
+  const current = await Notifications.getPermissionsAsync();
+  if (current.granted) return "granted";
+  return current.canAskAgain ? "undetermined" : "denied";
+}
+
+// Pide el permiso desde Ajustes. Devuelve el estado resultante.
+export async function requestNotificationPermission(): Promise<PermissionState> {
+  if (!Notifications) return "unavailable";
+  const granted = await ensurePermission(Notifications);
+  return granted ? "granted" : getNotificationPermission();
+}
+
+// Notificación de prueba a los 5 segundos, para comprobar que todo funciona.
+export async function sendTestNotification(): Promise<boolean> {
+  if (!Notifications) return false;
+  if (!(await ensurePermission(Notifications))) return false;
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: "Daily!",
+      body: "Así se verán tus recordatorios de tareas.",
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: 5,
+      channelId: CHANNEL_ID,
+    },
+  });
+  return true;
 }
 
 export type SyncResult =
@@ -72,7 +109,6 @@ export async function syncTaskNotifications(tasks: Task[]): Promise<SyncResult> 
   const N = Notifications;
   if (!N) return { status: "unavailable" };
   const withTime = tasks.filter((t) => !!t.time);
-  console.log(`[notif] sync: ${tasks.length} tareas, ${withTime.length} con hora`);
   if (withTime.length === 0) {
     await cancelTaskNotifications();
     return { status: "no-tasks" };
@@ -119,6 +155,5 @@ export async function syncTaskNotifications(tasks: Task[]): Promise<SyncResult> 
       },
     });
   }
-  console.log(`[notif] programadas ${toSchedule.length}`);
   return { status: "ok", scheduled: toSchedule.length };
 }
