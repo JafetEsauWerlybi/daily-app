@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
+import { cancelTaskNotifications } from '../lib/notifications';
 
 interface AuthContextType {
   user: User | null;
@@ -54,6 +55,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
+    // Las notificaciones locales son de la cuenta que sale: no deben seguir sonando.
+    await cancelTaskNotifications().catch(() => {});
     await signOut(auth);
   };
 

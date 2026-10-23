@@ -9,7 +9,7 @@
 
 ```
 React Native: 0.86.3
-Expo: 57.0.21
+Expo: ~57.0.31 (expo install subió los parches del SDK 57; expo-router ~57.0.29)
 Firebase: 12.18.0 (@firebase/auth 1.13.5, @firebase/firestore)
 Expo Router: Latest (file-based routing)
 NativeWind: Latest (Tailwind CSS para React Native)
@@ -19,7 +19,11 @@ AsyncStorage: @react-native-async-storage/async-storage 2.2.0 (para persistencia
 SafeAreaContext: react-native-safe-area-context (NO usar SafeAreaView de react-native)
 StatusBar: expo-status-bar (para manejo transparente de barra de estado)
 WheelPicker: @quidone/react-native-wheel-picker (incluye código nativo opcional en el paquete, pero funciona sin rebuild nativo vía Expo Go — usado para date/time pickers tipo rueda)
+Notificaciones: expo-notifications ~57.0.24 (locales; NO funciona en Expo Go de Android, ver sección 11)
+Dev build: expo-dev-client ~57.0.20 + EAS Build (eas.json con perfiles development/preview/production)
 ```
+
+**Entorno de ejecución: development build, ya NO Expo Go.** Desde que se agregó `expo-notifications` la app se corre con un APK de desarrollo (compilado con EAS, ver "Comandos Útiles"), no con Expo Go. Se sigue usando `npx expo start` y Fast Refresh igual; solo hay que recompilar el APK cuando cambian dependencias nativas, plugins o permisos de `app.json`, o la versión de Expo/RN. Mucha documentación de abajo menciona "Expo Go" por haberse escrito antes; el comportamiento de JS descrito sigue vigente.
 
 **NO instalados (probados y revertidos):** `@gorhom/bottom-sheet`, `@react-native-community/datetimepicker`. Ver sección "Problemas Resueltos" abajo antes de volver a intentarlos.
 
@@ -183,6 +187,27 @@ Se usa `@quidone/react-native-wheel-picker` (`DatePicker` para fecha, `WheelPick
 - No agregar hex fijos de fondo/texto en componentes nuevos; usar las clases remapeadas o `useTheme().colors`.
 - Cambios en `tailwind.config.ts`/`global.css` requieren reiniciar Metro con caché limpia (`npx expo start -c`).
 
+### 11. **Notificaciones locales (expo-notifications + development build)**
+**Problema 1 (CRÍTICO):** en **Expo Go para Android** (desde SDK 53) falta el módulo nativo `ExpoTopicSubscriptionModule`, y `import "expo-notifications"` lanza al evaluarse. Como `auth-context` importaba `lib/notifications`, tumbó **toda** la app (síntoma: `Cannot find native module 'ExpoTopicSubscriptionModule'` y "Route ... is missing the required default export" en todas las rutas). Todas las 57.x traen el mismo archivo; bajar de versión no ayuda. La doc dice que las locales "siguen disponibles", pero el import no sobrevive en Go.
+
+**Solución:** (a) `src/lib/notifications.ts` carga el módulo con `require` dentro de `try/catch` (`let Notifications = null`), así en Expo Go solo sale un `WARN` y las notificaciones quedan apagadas; (b) para probarlas de verdad se usa un **development build** con EAS (APK).
+
+**Cómo funciona:**
+- `syncTaskNotifications(tasks)` cancela todo y reprograma **solo los próximos 14 días** (`WINDOW_DAYS`) con triggers tipo `DATE` y `identifier` `{taskId}_{YYYY-MM-DD}`, usando `isTaskForDate` (respeta `repeatDays`, `dateEnd` y tareas de un día). Máximo 60 (`MAX_SCHEDULED`; iOS conserva 64). No se usan triggers semanales porque no respetan `dateEnd`.
+- `NotificationSync` (sin UI, montado en `(tabs)/_layout.tsx`) → `useTaskNotifications`: re-sincroniza al cambiar las tareas y al volver la app a primer plano (así la ventana avanza). Abre su propia suscripción `useTasks`.
+- Permisos: se piden solo si hay alguna tarea con `time`. En Android primero se crea el canal `tasks` (Android 13+ no muestra el prompt sin canal). Si el permiso quedó denegado (`canAskAgain: false`) sale un `Alert` una vez por sesión con botón "Abrir ajustes".
+- `logout` en `auth-context` llama `cancelTaskNotifications()`.
+- Plugin en `app.json`: `["expo-notifications", { "color": "#a855f7" }]` (requiere nuevo binario).
+
+**No repetir:** no importar `expo-notifications` con `import` estático en un módulo que cargue la app al arrancar; no asumir que Expo Go sirve para notificaciones en Android; no usar triggers semanales/repetitivos para tareas con vigencia.
+
+### 12. **Errores de Firestore en la UI**
+- `src/lib/firestore-error.ts` (`describeFirestoreError`) traduce `permission-denied`, `unavailable`, `unauthenticated` y `failed-precondition` a mensajes en español.
+- `use-tasks` y `use-task-logs` usan ese helper en todos sus `catch`/callbacks de `onSnapshot`, y exponen `clearError`; `refresh()` también limpia el error.
+- `src/components/ErrorBanner.tsx` (aviso rojo cerrable con X) se muestra bajo el header en Hoy, Tablero y Calendario con `tasksError ?? logsError`.
+- Add Task Modal valida Fin ≥ Inicio (`endBeforeStart`): borde rojo en Fin, mensaje y "Guardar" deshabilitado; `handleSave` también lo verifica.
+- Reglas de Firestore: `FIRESTORE_RULES.md`. **`users/{uid}` no cubre sus subcolecciones**, por eso `users/{uid}/taskLogs` lleva su propio `match`; `tasks` tiene `update` que impide cambiar `userId`.
+
 ---
 
 ## 🎨 Estilos & Tipografía (HOMOLOGACIÓN REQUERIDA)
@@ -315,6 +340,8 @@ src/
 │   ├── AddTaskModal.tsx         (Overlay View + wheel pickers, ver sección "Add Task Modal")
 │   ├── TaskDetailsModal.tsx     (Detalle de solo lectura de una ocurrencia; mismo patrón de overlay)
 │   ├── TaskRow.tsx              (Fila compartida Hoy/Tablero/Calendario: círculo + título + chips; estados completed/pending/missed)
+│   ├── ErrorBanner.tsx          (Aviso rojo cerrable para errores de Firestore, ver sección 12)
+│   ├── NotificationSync.tsx     (Sin UI; mantiene las notificaciones locales al día, ver sección 11)
 │   ├── calendar/                (CalendarModeSwitch, WeekStrip, MonthGrid, YearGrid, DayCell, DayTaskList)
 │   └── [otros componentes...]
 ├── constants/
@@ -328,11 +355,14 @@ src/
 ├── hooks/
 │   ├── use-back-handler.ts      (useFocusEffect + BackHandler)
 │   ├── use-tasks.ts             (Firestore real-time tasks, addTask/deleteTask, refresh/syncing)
-│   ├── use-task-logs.ts         (Logs de cumplimiento por rango de fechas: isCompleted/setCompleted/refresh)
+│   ├── use-task-logs.ts         (Logs de cumplimiento por rango de fechas: isCompleted/setCompleted/refresh/clearError)
+│   ├── use-task-notifications.ts (Sincroniza notificaciones locales: al cambiar tareas y al volver a primer plano)
 │   └── [otros hooks...]
 ├── lib/
 │   ├── theme.ts                 (Paletas claro/oscuro, buildTheme, utilidades hex/hsv)
 │   ├── firebase.ts              (initializeAuth con AsyncStorage)
+│   ├── firestore-error.ts       (describeFirestoreError: códigos de Firestore → mensajes en español)
+│   ├── notifications.ts         (Carga tolerante de expo-notifications, canal, permisos, syncTaskNotifications/cancelTaskNotifications)
 │   └── task-schedule.ts         (isTaskForDate, getWeekDays, getMonthGrid, countDay, countTasksInMonth, addDays, getOccurrenceStatus, logId, toDateStr)
 ├── types/
 │   └── task.ts                  (Task, TaskLog, OccurrenceStatus)
@@ -406,6 +436,10 @@ module.exports = withNativeWind(config, { input: './src/global.css' });
 | Teclado tapa el input de Hoy en Android | `KeyboardAvoidingView` depende de `windowSoftInputMode` nativo, que Expo Go no aplica | Listener manual `Keyboard.addListener` + `marginBottom` dinámico | No confiar en `KeyboardAvoidingView` dentro de Expo Go |
 | `addDoc` falla al guardar tareas con campos opcionales vacíos | Firestore rechaza valores `undefined` (`time`, fechas, `repeatDays` sin llenar) | `addTask` filtra las entradas `undefined` antes de `addDoc` | No pasar objetos con `undefined` a Firestore; omitir el campo |
 | Tarea semanal aparece en días que no son suyos / se queda marcada | Un solo `done` en la tarea no sirve para tareas repetitivas | Logs de cumplimiento por tarea+día (sección 8) | No volver a guardar `done`/`completedAt` en `Task` |
+| App entera falla con `Cannot find native module 'ExpoTopicSubscriptionModule'` | `import "expo-notifications"` lanza en Expo Go de Android (SDK 53+) y se importaba al arrancar | `require` en `try/catch` en `lib/notifications.ts` + development build con EAS | No usar import estático de `expo-notifications` en el arranque; Expo Go no sirve para notificaciones |
+| Nunca pidió permiso de notificaciones ni avisó nada | El módulo ni cargaba (fila anterior) y los fallos de sync solo iban a `console.warn` | Logs `[notif]` y `Alert` si el permiso está denegado | No dejar fallos de funciones en segundo plano sin rastro visible |
+| `expo install <paquete>` subió muchos paquetes | Alinea todo el SDK 57 a sus últimos parches (expo 57.0.21 → 57.0.31, etc.) | Revisar `git diff package.json` tras cada `expo install` | No asumir que instalar un paquete solo agrega ese paquete |
+| Tareas/logs no se guardan o no se leen (silencioso) | Las reglas de `users/{uid}` no cubren la subcolección `taskLogs` | `match /taskLogs/{logId}` explícito (ver `FIRESTORE_RULES.md`) | Las reglas de un documento no bajan a sus subcolecciones |
 
 ---
 
@@ -424,17 +458,15 @@ module.exports = withNativeWind(config, { input: './src/global.css' });
 
 ## 🚀 Próximos Pasos Pendientes
 
-1. **Validación de fechas del Add Task Modal** — ya se guarda en Firestore, pero nada impide Fin < Inicio (con repetición la tarea nunca aparecería)
-2. **Verificar en dispositivo real** — los fixes de performance/timezone del Add Task Modal (`T00:00:00`, precalentamiento de `Intl`) y todo lo de Hoy/Tablero/logs se validó por lectura de código + `tsc`, no en el Samsung A15 físico
-3. **Mostrar errores de Firestore en UI** — `use-tasks` y `use-task-logs` guardan `error` pero ninguna pantalla lo muestra
-4. **Unificar `MONTHS`/`DAY_NAMES`** — Tablero y Hoy aún tienen su propia copia; usar `src/constants/dates.ts`
-5. **Implementar Profile sub-screens** — Notificaciones, Cuenta, Privacidad, Ayuda (Apariencia ya está, sección 10)
-6. **OAuth Google & Apple** — Botones de login ya existen, falta integración
+1. **Pulir notificaciones locales** — no avisar de tareas ya completadas hoy (requiere logs) y abrir la tarea al tocar la notificación (`data.taskId`); quitar o bajar de nivel los `console.log("[notif]…")` de diagnóstico en `lib/notifications.ts` cuando se confirme que todo va bien
+2. **Verificar en dispositivo real** — notificaciones (permiso, canal, que lleguen a la hora), Apariencia, guardado/lectura de logs y los fixes del Add Task Modal se validaron por código + `tsc`; el usuario confirmó los cambios de errores/validación/reglas en el dev build, pero no hay prueba escrita de cada flujo
+3. **Unificar `MONTHS`/`DAY_NAMES`** — Tablero y Hoy aún tienen su propia copia; usar `src/constants/dates.ts`
+4. **Implementar Profile sub-screens** — Notificaciones (activar/desactivar, hora por defecto), Cuenta, Privacidad, Ayuda (Apariencia ya está, sección 10)
+5. **OAuth Google & Apple** — Botones de login ya existen, falta integración
    - **Recuperar contraseña (`forgot-password.tsx`)** — los pasos "verificar código" y "cambiar contraseña" tienen `TODO` y no llaman a Firebase (el segundo solo simula con `setTimeout`); es solo UI
-7. **Programar notificación local real** para la hora seleccionada en Add Task (hoy solo se guarda el campo `time`, no se agenda con `expo-notifications`)
-8. **Firebase Cloud Messaging** — Push notifications
-9. **Firestore Security Rules** — Publicar reglas de seguridad (incluir `users/{uid}/taskLogs`: lectura/escritura solo del dueño)
-10. **Testing en dispositivos reales** — Verificar en Android + iOS físicos
+6. **Firebase Cloud Messaging** — Push notifications (necesita el dev build, no Expo Go)
+7. **Build de uso diario** — el APK `development` depende de Metro en la PC; para usarla sin PC compilar `preview` (o `production` cuando toque publicar)
+8. **Testing en dispositivos reales** — Verificar en iOS físico (Android ya se corre en dev build)
 
 ---
 
@@ -447,9 +479,10 @@ npx expo start -c
 # Ver logs en vivo
 npx expo start --localhost
 
-# Builds
-eas build --platform android --local
-eas build --platform ios --local
+# Builds (EAS en la nube, no requiere Android Studio; login con `npx eas-cli login`, proyecto vinculado con `npx eas-cli init`)
+npx eas-cli build --profile development --platform android   # dev build: necesita `npx expo start` en la PC
+npx eas-cli build --profile preview --platform android       # APK autónomo (JS empaquetado) para uso diario
+# Recompilar solo si cambian deps nativas, plugins/permisos de app.json o versión de Expo/RN; el código JS se recarga con Metro
 
 # Linter/Format
 npx prettier --write src/
@@ -471,23 +504,23 @@ npx tsc --noEmit
 
 ---
 
-## 📌 Última Sesión: 2026-10-12
+## 📌 Última Sesión: 2026-10-23
 
-**Logros (acciones sobre tareas en Calendario y modal de nueva tarea):**
-✅ Calendario, vista Mes: cuadrícula + lista del día en un solo `ScrollView` vertical (sección 9)
-✅ Calendario (Semana y Mes): el detalle de tarea muestra acciones en hoy y días futuros: Finalizar hoy, Cerrar este día, Eliminar tarea y Marcar/Quitar como completada, con confirmación (sección 9). `use-tasks` expone `updateTaskEnd` y `deleteTask` borra también los logs
-✅ Add Task Modal: abre con una sola fecha; el checkbox "¿Tarea recurrente?" muestra Fin y "Días que se realizará"; con 1 solo día marcado, ese día sigue al weekday de la fecha de inicio (sección 8)
-✅ Perfil → Apariencia: tema claro/oscuro + color de acento con rueda, guardado en AsyncStorage (sección 10). Sin probar en dispositivo; hace falta `npx expo start -c`
-✅ Docs corregidas: comentario de `DayCell`, fila de `@gorhom` y pendiente de "Recuperar contraseña"
+**Logros:**
+✅ Add Task Modal: validación Fin ≥ Inicio (borde rojo, mensaje, Guardar deshabilitado) (sección 12)
+✅ Errores de Firestore visibles: `ErrorBanner` en Hoy/Tablero/Calendario + mensajes en español + `clearError` en los hooks (sección 12)
+✅ `FIRESTORE_RULES.md` corregido: regla explícita para `users/{uid}/taskLogs`, `update`/`delete` en `tasks`
+✅ Notificaciones locales: ventana de 14 días con triggers de fecha, sincronizadas al cambiar tareas y al volver a primer plano; cancelación al cerrar sesión (sección 11)
+✅ Se descubrió que Expo Go de Android no soporta `expo-notifications`; se hizo la carga tolerante y se migró a **development build con EAS** (`eas.json`, `expo-dev-client`). El usuario ya instaló el APK y la app corre ("ya jaló")
 
-**Pendiente inmediato:** las **reglas de Firestore** para `users/{uid}/taskLogs` (sin ellas puede fallar al guardar; el error solo queda en `error` del hook, no se muestra en UI) y validar Fin ≥ Inicio en el modal. El Calendario sí se ha ido viendo en el celular durante los ajustes de estilo, pero el guardado/lectura de logs y los fixes anteriores del modal siguen sin confirmarse en el Samsung A15.
+**Pendiente inmediato:** confirmar en el dev build que el permiso se pide y que la notificación llega a la hora; luego pulirlas (no avisar de completadas, abrir la tarea al tocar). Quitar los `console.log("[notif]…")` de diagnóstico cuando todo esté confirmado.
 
-**Pendiente además:** las reglas de Firestore deben permitir `update`/`delete` sobre `tasks` y consultar `users/{uid}/taskLogs` por `taskId` (las acciones nuevas fallan sin avisar en UI si no); probar en el Samsung A15 que `ConfirmModal` (`<Modal>` nativo) quede encima del detalle.
+**Ojo:** `npx expo install` subió los parches de todo el SDK 57 (revisar `package.json` al commitear). El APK `development` necesita Metro corriendo; para uso diario sin PC compilar `preview`.
 
-**Próxima sesión:** publicar reglas de Firestore, validar fechas del modal, luego Perfil (sub-pantallas) y notificaciones locales.
+**Próxima sesión:** pulir notificaciones, luego Perfil (sub-pantallas, empezando por Notificaciones) y recuperar contraseña real.
 
 ---
 
 **Escrito por:** Claude Sonnet 5.5  
-**Fecha:** 2026-10-12  
+**Fecha:** 2026-10-23  
 **Proyecto:** Daily! Task Manager

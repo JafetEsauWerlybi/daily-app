@@ -1,4 +1,5 @@
 import { Tabs } from 'expo-router';
+import { NotificationSync } from '@/components/NotificationSync';
 import { useTheme } from '@/contexts/theme-context';
 import { FontAwesomeIcon } from '@fortawesome/react-native-fontawesome';
 import {
@@ -11,6 +12,8 @@ import {
 export default function TabsLayout() {
   const { colors } = useTheme();
   return (
+    <>
+    <NotificationSync />
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: colors.accent,
@@ -62,5 +65,6 @@ export default function TabsLayout() {
         }}
       />
     </Tabs>
+    </>
   );
 }
