@@ -48,6 +48,7 @@ function ThemedStack() {
         <Stack.Screen name="auth" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="apariencia" />
+        <Stack.Screen name="nota" />
         <Stack.Screen name="notificaciones" />
         <Stack.Screen name="cuenta" />
         <Stack.Screen name="privacidad" />

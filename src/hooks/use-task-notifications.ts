@@ -4,16 +4,23 @@ import { cancelTaskNotifications, syncTaskNotifications } from "@/lib/notificati
 import { Task } from "@/types/task";
 
 // Mantiene sincronizadas las notificaciones locales con las tareas del usuario.
-// Se vuelve a ejecutar al cambiar las tareas y cada vez que la app vuelve a primer
-// plano (para mover la ventana de días programados).
+// Se vuelve a ejecutar al cambiar las tareas o los logs de cumplimiento (para no
+// avisar de lo ya completado) y cada vez que la app vuelve a primer plano (para
+// mover la ventana de días programados).
 export function useTaskNotifications(
   userId: string | undefined,
   tasks: Task[],
   loading: boolean,
   enabled: boolean,
+  isCompleted: (taskId: string, day: string) => boolean,
+  // Cambia cuando cambian los logs; hace que el efecto vuelva a correr.
+  logsVersion: unknown,
 ) {
   // Avisar del permiso denegado una sola vez por sesión.
   const warnedDenied = useRef(false);
+  // El efecto debe usar el isCompleted más reciente sin reiniciarse por su identidad.
+  const isCompletedRef = useRef(isCompleted);
+  isCompletedRef.current = isCompleted;
 
   useEffect(() => {
     // Sin sesión o con las notificaciones apagadas en Ajustes: nada programado.
@@ -24,7 +31,7 @@ export function useTaskNotifications(
     if (loading) return;
 
     const run = () => {
-      syncTaskNotifications(tasks)
+      syncTaskNotifications(tasks, (id, day) => isCompletedRef.current(id, day))
         .then((result) => {
           if (result.status !== "denied" || warnedDenied.current) return;
           warnedDenied.current = true;
@@ -45,5 +52,5 @@ export function useTaskNotifications(
       if (state === "active") run();
     });
     return () => sub.remove();
-  }, [userId, tasks, loading, enabled]);
+  }, [userId, tasks, loading, enabled, logsVersion]);
 }

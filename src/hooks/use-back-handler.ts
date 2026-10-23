@@ -3,7 +3,7 @@ import { BackHandler } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useNavigationHistory } from '@/contexts/navigation-history-context';
 
-type TabName = 'hoy' | 'tablero' | 'calendario' | 'perfil';
+type TabName = 'hoy' | 'tablero' | 'calendario' | 'notas' | 'perfil';
 
 /**
  * Hook para manejar el botón de regresar del teléfono dentro de los tabs.

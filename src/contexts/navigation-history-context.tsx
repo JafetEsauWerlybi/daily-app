@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useRef, useCallback } from 'react';
 
-type TabName = 'hoy' | 'tablero' | 'calendario' | 'perfil';
+type TabName = 'hoy' | 'tablero' | 'calendario' | 'notas' | 'perfil';
 
 interface NavigationHistoryContextValue {
   visitTab: (tab: TabName) => void;

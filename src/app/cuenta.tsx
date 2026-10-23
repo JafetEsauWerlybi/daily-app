@@ -1,6 +1,8 @@
+import { ConfirmModal } from "@/components/ConfirmModal";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useAuth } from "@/contexts/auth-context";
 import { useTheme } from "@/contexts/theme-context";
+import { faTrashCan } from "@fortawesome/free-solid-svg-icons";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -44,7 +46,8 @@ function Field({
 
 export default function CuentaScreen() {
   const { colors } = useTheme();
-  const { user, hasPassword, updateDisplayName, changePassword } = useAuth();
+  const { user, hasPassword, updateDisplayName, changePassword, deleteAccount } =
+    useAuth();
 
   const [name, setName] = useState(user?.displayName ?? "");
   const [savingName, setSavingName] = useState(false);
@@ -120,6 +123,29 @@ export default function CuentaScreen() {
       });
     } finally {
       setSavingPassword(false);
+    }
+  };
+
+  const [deletePassword, setDeletePassword] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  const handleDelete = async () => {
+    setConfirmDelete(false);
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      // Al borrarse la cuenta, el cambio de sesión te regresa al login.
+      await deleteAccount(hasPassword ? deletePassword : undefined);
+    } catch (err: any) {
+      setDeleteError(
+        PASSWORD_ERRORS[err?.code] ||
+          err?.message ||
+          "No se pudo eliminar la cuenta",
+      );
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -278,8 +304,77 @@ export default function CuentaScreen() {
               Daily! que cambiar.
             </Text>
           )}
+
+          {/* Eliminar cuenta */}
+          <Text
+            className="text-xl text-red-500 mt-12 mb-2"
+            style={{ fontFamily: "MomoTrustSans-SemiBold" }}
+          >
+            Eliminar cuenta
+          </Text>
+          <Text
+            className="text-sm text-gray-400 mb-4"
+            style={{ fontFamily: "MomoTrustSans-Regular" }}
+          >
+            Se borran para siempre tu cuenta, tus tareas, tus registros y tus
+            notas. No se puede deshacer.
+          </Text>
+
+          {hasPassword && (
+            <Field label="Tu contraseña">
+              <TextInput
+                className={inputClass}
+                value={deletePassword}
+                onChangeText={setDeletePassword}
+                secureTextEntry
+                placeholder="••••••••"
+                placeholderTextColor={colors.gray500}
+                editable={!deleting}
+                style={{ fontFamily: "MomoTrustSans-Regular" }}
+              />
+            </Field>
+          )}
+
+          {deleteError !== "" && (
+            <Text
+              className="text-xs text-red-500 mb-3"
+              style={{ fontFamily: "MomoTrustSans-Regular" }}
+            >
+              {deleteError}
+            </Text>
+          )}
+
+          <TouchableOpacity
+            className={`rounded-lg py-3 items-center border border-red-500 ${
+              deleting || (hasPassword && !deletePassword) ? "opacity-50" : ""
+            }`}
+            onPress={() => setConfirmDelete(true)}
+            disabled={deleting || (hasPassword && !deletePassword)}
+          >
+            {deleting ? (
+              <ActivityIndicator color="#ef4444" />
+            ) : (
+              <Text
+                className="text-red-500 text-sm"
+                style={{ fontFamily: "MomoTrustSans-SemiBold" }}
+              >
+                Eliminar mi cuenta
+              </Text>
+            )}
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <ConfirmModal
+        visible={confirmDelete}
+        icon={faTrashCan}
+        title="¿Eliminar tu cuenta?"
+        message="Se borrarán todos tus datos y no podrás recuperarlos."
+        confirmText="Sí, eliminar"
+        cancelText="Cancelar"
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </SafeAreaView>
   );
 }

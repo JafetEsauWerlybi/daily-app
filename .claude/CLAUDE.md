@@ -198,6 +198,8 @@ Se usa `@quidone/react-native-wheel-picker` (`DatePicker` para fecha, `WheelPick
 - `NotificationSync` (sin UI, montado en `(tabs)/_layout.tsx`) → `useTaskNotifications`: re-sincroniza al cambiar las tareas y al volver la app a primer plano (así la ventana avanza). Abre su propia suscripción `useTasks`.
 - Permisos: se piden solo si hay alguna tarea con `time`. En Android primero se crea el canal `tasks` (Android 13+ no muestra el prompt sin canal). Si el permiso quedó denegado (`canAskAgain: false`) sale un `Alert` una vez por sesión con botón "Abrir ajustes".
 - `logout` en `auth-context` llama `cancelTaskNotifications()`.
+- **No avisa de lo ya completado:** `NotificationSync` también suscribe `useTaskLogs` (hoy → +13 días) y pasa `isCompleted` a `syncTaskNotifications`; al marcar/desmarcar se reprograma. "Hoy" se recalcula al volver a primer plano.
+- **Tocar la notificación abre la tarea:** `subscribeToNotificationTaps` (listener + `getLastNotificationResponse` para app cerrada) navega a `/(tabs)/hoy` con `params.taskId`; `hoy.tsx` abre `TaskDetailsModal` y limpia el parámetro con `router.setParams`.
 - Plugin en `app.json`: `["expo-notifications", { "color": "#a855f7" }]` (requiere nuevo binario).
 
 **No repetir:** no importar `expo-notifications` con `import` estático en un módulo que cargue la app al arrancar; no asumir que Expo Go sirve para notificaciones en Android; no usar triggers semanales/repetitivos para tareas con vigencia.
@@ -213,6 +215,7 @@ Se usa `@quidone/react-native-wheel-picker` (`DatePicker` para fecha, `WheelPick
 Rutas de stack en raíz (`src/app/notificaciones.tsx`, `cuenta.tsx`, `privacidad.tsx`, `ayuda.tsx`, junto a `apariencia.tsx`), registradas en `_layout.tsx` y abiertas desde `MENU_ITEMS` de `perfil.tsx` (`route: Href`). Comparten `ScreenHeader` (flecha + título).
 - **Notificaciones:** `NotificationSettingsProvider` (`contexts/notification-settings-context.tsx`, AsyncStorage `daily.notifications.v1`, `{enabled, defaultTime}`) montado dentro de `AuthProvider`. `enabled=false` → `useTaskNotifications` cancela todo. `defaultTime` reemplaza el `08:00` fijo de `AddTaskModal`. La pantalla muestra el permiso del sistema (`getNotificationPermission`/`requestNotificationPermission`, "Abrir ajustes" si está bloqueado) y `sendTestNotification` (5 s). El wheel de hora se monta solo al abrirse (render condicional, nunca dentro de `display:none`).
 - **Cuenta:** `auth-context` expone `updateDisplayName` (`updateProfile` + `users/{uid}.name`), `changePassword` (reautentica con la contraseña actual) y `hasPassword` (provider `password`). `updateProfile` muta el mismo `user`, por eso un contador interno fuerza el re-render. Cuentas de Google no ven el formulario de contraseña. `register` ahora también guarda `displayName`.
+- **Eliminar cuenta** (Cuenta): `auth-context.deleteAccount(password?)` reautentica primero (contraseña, o `getGoogleCredential()` si es cuenta de Google), borra `tasks` del usuario, `users/{uid}/taskLogs`, `users/{uid}/notes` y `users/{uid}` en lotes de 400, cancela notificaciones, cierra Google y `deleteUser`. El cambio de sesión devuelve al login (lo hace `index.tsx`). Con `ConfirmModal` de confirmación.
 - **Privacidad y Ayuda:** informativas (FAQ en acordeón, versión de `expo-constants`).
 - **Olvidé mi contraseña** (`auth/forgot-password.tsx`): ahora **un solo paso** (correo → `sendPasswordResetEmail`, pantalla de éxito, reenvío con espera de 30 s). Firebase no ofrece flujo de código de 6 dígitos desde el cliente; no volver a ese diseño.
 
@@ -221,10 +224,19 @@ Rutas de stack en raíz (`src/app/notificaciones.tsx`, `cuenta.tsx`, `privacidad
 - El **Web client ID** vive en `app.json → expo.extra.googleWebClientId` (no en `.env`: EAS no sube archivos ignorados por git). No es secreto.
 - Configuración externa que ya está hecha: Google habilitado en Firebase Auth; app Android `com.daily.app` registrada en Firebase con el **SHA-1 del keystore de EAS** (`npx eas-cli credentials`, las credenciales por defecto se comparten entre perfiles). No se usa `google-services.json`.
 - **Pendiente al publicar en Play Store:** agregar también el SHA-1 de la firma de Google Play (App Signing), si no, Google Sign-In falla en la versión publicada.
-- Solo el login tiene botón de Google; entrar con Google ya crea la cuenta.
+- Login y Registro tienen botón de Google (`loginWithGoogle` crea la cuenta si no existe). `getGoogleCredential()` se reutiliza para reautenticar al eliminar la cuenta.
 
 ### 15. **Ícono de la app**
 Fuente: SVG del usuario (calendario morado `#8B5CF6` sobre negro, insignia verde con palomita). Se generaron con `sharp` (instalado en una carpeta temporal, no en el proyecto): `icon.png` 1024 sin esquinas redondeadas, `android-icon-foreground.png` (transparente, dentro de la zona segura), `android-icon-background.png` (negro), `android-icon-monochrome.png` (recortes en los días), `favicon.png` y `splash-icon.png`. `app.json`: `adaptiveIcon.backgroundColor` `#000000` + `monochromeImage`. El ícono de iOS (`assets/expo.icon`) sigue siendo el de la plantilla. Cambiar el ícono requiere nuevo APK.
+
+### 16. **Pestaña Notas (independiente de las tareas)**
+Pestaña `notas` (icono `faNoteSticky`, entre Calendario y Perfil; `TabName` en `use-back-handler` y `navigation-history-context` incluye `'notas'`). Funciona como Samsung Notes y **no se mezcla con tareas ni logs**.
+- **Datos:** `users/{uid}/notes/{noteId}` → `{title, body, color, pinned, createdAt, updatedAt}` (epoch ms). `hooks/use-notes.ts`: `onSnapshot` con `orderBy('updatedAt','desc')`, `newNoteId`, `saveNote` (merge), `setPinned` (no cambia `updatedAt`), `deleteNotes`, `error/clearError`. Reglas: `match /notes/{noteId}` en `FIRESTORE_RULES.md` (**hay que publicarlas**). `deleteAccount` también borra las notas.
+- **Lista** (`(tabs)/notas.tsx`): cuadrícula de 2 columnas tipo masonry (`splitColumns` reparte por peso) o lista (preferencia en AsyncStorage `daily.notes.view.v1`), búsqueda en título/cuerpo, secciones Fijadas/Otras (solo si hay de ambas), botón + flotante. **Pulsación larga = selección múltiple** (fijar/desfijar y eliminar con `ConfirmModal`); con selección activa el botón atrás solo cancela la selección.
+- **Editor** (`src/app/nota.tsx`, ruta de stack, `id` = `new` o el id): título + cuerpo multilínea, fijar, paleta de 8 colores (`constants/note-colors.ts`, tinte translúcido `hex + '33'` para que sirva en claro y oscuro), eliminar y pie con fecha/caracteres. **Autoguardado** a los 500 ms y al salir; una nota nueva vacía no se crea y una guardada que se deja vacía se elimina (como Samsung). Teclado con listener manual igual que Hoy (`keyboardHeight`).
+- `components/NoteCard.tsx` (tarjeta), `lib/note-format.ts` (`formatNoteDate`), `types/note.ts`.
+
+**No repetir:** no acoplar notas a `useTasks`/`Task`; no guardar notas vacías; no usar `KeyboardAvoidingView` (ver sección 7).
 
 ---
 
@@ -343,6 +355,7 @@ src/
 │   │   ├── hoy.tsx              (Today tasks - con useBackHandler)
 │   │   ├── tablero.tsx          (Semana en curso lun→dom, secciones plegables por día, botón sync, con useBackHandler)
 │   │   ├── calendario.tsx       (Semana/Mes/Año con indicadores por día y lista del día, con useBackHandler)
+│   │   ├── notas.tsx            (Lista de notas: cuadrícula/lista, búsqueda, selección múltiple; sección 16)
 │   │   └── perfil.tsx           (Profile + logout, con useBackHandler)
 │   ├── auth/
 │   │   ├── _layout.tsx          (Auth stack navigator)
@@ -350,6 +363,7 @@ src/
 │   │   ├── register.tsx
 │   │   └── forgot-password.tsx  (3 steps: email → code → password)
 │   ├── apariencia.tsx           (Tema claro/oscuro + rueda de color de acento; ver sección 10)
+│   ├── nota.tsx                 (Editor de una nota con autoguardado, sección 16)
 │   ├── notificaciones.tsx / cuenta.tsx / privacidad.tsx / ayuda.tsx  (Sub-pantallas de Perfil, sección 13)
 │   └── explore.tsx              (Template - puede deletarse)
 ├── components/
@@ -360,11 +374,13 @@ src/
 │   ├── TaskDetailsModal.tsx     (Detalle de solo lectura de una ocurrencia; mismo patrón de overlay)
 │   ├── TaskRow.tsx              (Fila compartida Hoy/Tablero/Calendario: círculo + título + chips; estados completed/pending/missed)
 │   ├── ErrorBanner.tsx          (Aviso rojo cerrable para errores de Firestore, ver sección 12)
+│   ├── NoteCard.tsx             (Tarjeta de nota: color, fijada, selección)
 │   ├── ScreenHeader.tsx         (Flecha + título de las sub-pantallas de Perfil, sección 13)
 │   ├── NotificationSync.tsx     (Sin UI; mantiene las notificaciones locales al día, ver sección 11)
 │   ├── calendar/                (CalendarModeSwitch, WeekStrip, MonthGrid, YearGrid, DayCell, DayTaskList)
 │   └── [otros componentes...]
 ├── constants/
+│   ├── note-colors.ts           (NOTE_COLORS, noteTint)
 │   ├── categories.ts            (TASK_CATEGORIES, CATEGORY_COLORS — compartido entre Hoy y AddTaskModal)
 │   └── dates.ts                 (MONTHS, DAY_NAMES, WEEKDAY_LETTERS — lunes primero)
 ├── contexts/
@@ -377,16 +393,19 @@ src/
 │   ├── use-back-handler.ts      (useFocusEffect + BackHandler)
 │   ├── use-tasks.ts             (Firestore real-time tasks, addTask/deleteTask, refresh/syncing)
 │   ├── use-task-logs.ts         (Logs de cumplimiento por rango de fechas: isCompleted/setCompleted/refresh/clearError)
+│   ├── use-notes.ts             (Notas en tiempo real: saveNote/setPinned/deleteNotes, sección 16)
 │   ├── use-task-notifications.ts (Sincroniza notificaciones locales: al cambiar tareas y al volver a primer plano)
 │   └── [otros hooks...]
 ├── lib/
 │   ├── theme.ts                 (Paletas claro/oscuro, buildTheme, utilidades hex/hsv)
 │   ├── firebase.ts              (initializeAuth con AsyncStorage)
 │   ├── firestore-error.ts       (describeFirestoreError: códigos de Firestore → mensajes en español)
+│   ├── note-format.ts           (formatNoteDate)
 │   ├── google-auth.ts           (signInWithGoogle/signOutFromGoogle, carga tolerante, sección 14)
 │   ├── notifications.ts         (Carga tolerante de expo-notifications, canal, permisos, syncTaskNotifications/cancelTaskNotifications)
 │   └── task-schedule.ts         (isTaskForDate, getWeekDays, getMonthGrid, countDay, countTasksInMonth, addDays, getOccurrenceStatus, logId, toDateStr)
 ├── types/
+│   ├── note.ts                  (Note, NoteColorKey)
 │   └── task.ts                  (Task, TaskLog, OccurrenceStatus)
 ├── global.css                   (Tailwind imports)
 └── [config files...]
@@ -482,14 +501,15 @@ module.exports = withNativeWind(config, { input: './src/global.css' });
 
 ## 🚀 Próximos Pasos Pendientes
 
-1. **Pulir notificaciones locales** — no avisar de tareas ya completadas hoy (requiere logs) y abrir la tarea al tocar la notificación (`data.taskId`). Las notificaciones ya llegan en el dev build y los logs `[notif]` de diagnóstico ya se quitaron
+1. **Publicar las reglas de `notes`** en Firebase Console (`FIRESTORE_RULES.md`); sin ellas la pestaña Notas muestra error de permisos
 2. **Verificar en dispositivo real** — el usuario confirmó en el dev build: notificaciones, Perfil (4 sub-pantallas), Google Sign-In y recuperar contraseña. Sin confirmar explícitamente: Apariencia y los fixes de wheel/timezone del Add Task Modal
 3. **Unificar `MONTHS`/`DAY_NAMES`** — Tablero y Hoy aún tienen su propia copia; usar `src/constants/dates.ts`
-4. **Perfil: lo que falta** — eliminar cuenta/datos (Cuenta/Privacidad) y contacto de soporte en Ayuda; botón de Google también en Registro
+4. **Perfil: lo que falta** — contacto de soporte en Ayuda (falta definir correo)
 5. **OAuth Apple** (iOS) — Google ya está (sección 14)
 6. **Firebase Cloud Messaging** — Push notifications (necesita el dev build, no Expo Go)
-7. **Build de uso diario** — el APK `development` depende de Metro en la PC; para usarla sin PC compilar `preview` (o `production` cuando toque publicar)
-8. **Testing en dispositivos reales** — Verificar en iOS físico (Android ya se corre en dev build)
+7. **Notas: mejoras posibles** — checklist dentro de la nota, carpetas/etiquetas, adjuntar imágenes, papelera con restaurar
+8. **Build de uso diario** — el APK `development` depende de Metro en la PC; para usarla sin PC compilar `preview` (o `production` cuando toque publicar)
+9. **Testing en dispositivos reales** — Verificar en iOS físico (Android ya se corre en dev build)
 
 ---
 
@@ -539,7 +559,11 @@ npx tsc --noEmit
 ✅ Recuperar contraseña real con enlace por correo (un solo paso)
 ✅ Google Sign-In con Firebase en el dev build (sección 14); ícono de la app desde el SVG del usuario (sección 15)
 
-**Pendiente inmediato:** pulir notificaciones (no avisar de completadas, abrir la tarea al tocar).
+✅ Notificaciones pulidas: no avisan de lo ya completado y tocarlas abre la tarea en Hoy (sección 11)
+✅ Eliminar cuenta (reautenticación + borrado de datos) y botón de Google en Registro (secciones 13 y 14)
+✅ Pestaña **Notas** nueva e independiente: lista, búsqueda, fijar, colores, selección múltiple y editor con autoguardado (sección 16). Sin probar en el teléfono
+
+**Pendiente inmediato:** publicar las reglas de `notes` en Firebase y probar la pestaña Notas en el teléfono (recargar con Metro; el APK actual sirve, no hay dependencias nativas nuevas).
 
 **Ojo:** `npx expo install` subió los parches de todo el SDK 57 (revisar `package.json` al commitear). El APK `development` necesita Metro corriendo; para uso diario sin PC compilar `preview`.
 

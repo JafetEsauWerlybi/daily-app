@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
   EmailAuthProvider,
   reauthenticateWithCredential,
   signInWithEmailAndPassword,
@@ -11,9 +12,23 @@ import {
   User,
   sendPasswordResetEmail,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  setDoc,
+  where,
+  writeBatch,
+} from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
-import { signInWithGoogle, signOutFromGoogle, GoogleSignInResult } from '../lib/google-auth';
+import {
+  getGoogleCredential,
+  signInWithGoogle,
+  signOutFromGoogle,
+  GoogleSignInResult,
+} from '../lib/google-auth';
 import { cancelTaskNotifications } from '../lib/notifications';
 
 interface AuthContextType {
@@ -29,6 +44,11 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<void>;
   updateDisplayName: (name: string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  /**
+   * Borra tareas, registros, notas y la cuenta. Reautentica antes: con la contraseña
+   * actual, o con Google si la cuenta no tiene contraseña. Devuelve false si se canceló.
+   */
+  deleteAccount: (password?: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -117,6 +137,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await updatePassword(current, newPassword);
   };
 
+  const deleteAccount = async (password?: string) => {
+    const current = auth.currentUser;
+    if (!current) throw new Error('No hay sesión activa');
+
+    // 1) Reautenticar primero: si falla no se borra nada.
+    if (current.providerData.some((p) => p.providerId === 'password')) {
+      if (!current.email || !password) throw new Error('Escribe tu contraseña');
+      await reauthenticateWithCredential(
+        current,
+        EmailAuthProvider.credential(current.email, password),
+      );
+    } else {
+      const credential = await getGoogleCredential();
+      if (!credential) return false;
+      await reauthenticateWithCredential(current, credential);
+    }
+
+    // 2) Borrar los datos del usuario (lotes de hasta 400 operaciones).
+    const refs = [
+      ...(await getDocs(query(collection(db, 'tasks'), where('userId', '==', current.uid)))).docs,
+      ...(await getDocs(collection(db, 'users', current.uid, 'taskLogs'))).docs,
+      ...(await getDocs(collection(db, 'users', current.uid, 'notes'))).docs,
+    ].map((d) => d.ref);
+    for (let i = 0; i < refs.length; i += 400) {
+      const batch = writeBatch(db);
+      refs.slice(i, i + 400).forEach((ref) => batch.delete(ref));
+      await batch.commit();
+    }
+    await writeBatch(db).delete(doc(db, 'users', current.uid)).commit();
+
+    // 3) Notificaciones, sesión de Google y la cuenta de Firebase.
+    await cancelTaskNotifications().catch(() => {});
+    await signOutFromGoogle();
+    await deleteUser(current);
+    return true;
+  };
+
   const hasPassword =
     user?.providerData.some((p) => p.providerId === 'password') ?? false;
 
@@ -133,6 +190,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         resetPassword,
         updateDisplayName,
         changePassword,
+        deleteAccount,
       }}
     >
       {children}

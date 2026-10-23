@@ -105,7 +105,11 @@ export async function cancelTaskNotifications() {
 
 // Deja programadas exactamente las notificaciones de las tareas con hora para
 // los próximos WINDOW_DAYS días: cancela todo y vuelve a programar.
-export async function syncTaskNotifications(tasks: Task[]): Promise<SyncResult> {
+export async function syncTaskNotifications(
+  tasks: Task[],
+  // Para no avisar de ocurrencias que ya se marcaron como completadas.
+  isCompleted?: (taskId: string, day: string) => boolean,
+): Promise<SyncResult> {
   const N = Notifications;
   if (!N) return { status: "unavailable" };
   const withTime = tasks.filter((t) => !!t.time);
@@ -122,6 +126,7 @@ export async function syncTaskNotifications(tasks: Task[]): Promise<SyncResult> 
     const day = addDays(now, i);
     for (const task of withTime) {
       if (!isTaskForDate(task, day)) continue;
+      if (isCompleted?.(task.id, toDateStr(day))) continue;
       const [h, m] = (task.time as string).split(":").map(Number);
       if (!Number.isFinite(h) || !Number.isFinite(m)) continue;
       const when = new Date(
@@ -156,4 +161,27 @@ export async function syncTaskNotifications(tasks: Task[]): Promise<SyncResult> 
     });
   }
   return { status: "ok", scheduled: toSchedule.length };
+}
+
+// Avisa con el id de la tarea cuando el usuario toca una notificación: tanto con la
+// app abierta/en segundo plano como si la notificación la abrió desde cerrada.
+export function subscribeToNotificationTaps(
+  onTask: (taskId: string) => void,
+): () => void {
+  const N = Notifications;
+  if (!N) return () => {};
+
+  const handle = (response: NotificationsModule.NotificationResponse | null) => {
+    const taskId = response?.notification.request.content.data?.taskId;
+    if (typeof taskId === "string") onTask(taskId);
+  };
+
+  handle(N.getLastNotificationResponse());
+  N.clearLastNotificationResponse();
+
+  const sub = N.addNotificationResponseReceivedListener((response) => {
+    handle(response);
+    N.clearLastNotificationResponse();
+  });
+  return () => sub.remove();
 }

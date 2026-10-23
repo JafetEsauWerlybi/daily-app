@@ -33,6 +33,11 @@ service cloud.firestore {
       match /taskLogs/{logId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+
+      // Notas (pestaña Notas, independientes de las tareas): users/{uid}/notes/{noteId}
+      match /notes/{noteId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
     // Denegar acceso a todo lo demás
@@ -48,6 +53,7 @@ service cloud.firestore {
 - **tasks**: cada usuario solo puede ver y modificar sus propias tareas. `update` además impide reasignar la tarea a otro `userId`; `delete` lo usa la acción "Eliminar tarea".
 - **users/{uid}**: cada usuario solo accede a su propio perfil.
 - **users/{uid}/taskLogs**: los logs de cumplimiento (marcar/desmarcar tareas). Sin esta regla la app falla al marcar tareas y el calendario no muestra completadas.
+- **users/{uid}/notes**: las notas de la pestaña Notas. Sin esta regla no se pueden crear ni leer.
 - El resto está bloqueado.
 
 ## Después de agregar las reglas:

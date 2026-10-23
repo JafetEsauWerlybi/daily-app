@@ -15,6 +15,7 @@ import {
 } from "@/lib/task-schedule";
 import { faPlus } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-native-fontawesome";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -50,6 +51,15 @@ export default function HoyScreen() {
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+
+  // Al tocar una notificación llega `taskId`: se abre el detalle de esa tarea.
+  const { taskId: notifTaskId } = useLocalSearchParams<{ taskId?: string }>();
+  const router = useRouter();
+  useEffect(() => {
+    if (!notifTaskId) return;
+    setSelectedTaskId(notifTaskId);
+    router.setParams({ taskId: undefined });
+  }, [notifTaskId, router]);
 
   // Manejar botón de regresar: navega por historial de tabs o pide confirmar salida
   const { exitModalVisible, confirmExit, cancelExit } = useBackHandler("hoy");

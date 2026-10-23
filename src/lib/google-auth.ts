@@ -1,5 +1,9 @@
 import Constants from "expo-constants";
-import { GoogleAuthProvider, signInWithCredential } from "firebase/auth";
+import {
+  AuthCredential,
+  GoogleAuthProvider,
+  signInWithCredential,
+} from "firebase/auth";
 import { auth } from "@/lib/firebase";
 
 // La librería es nativa: no existe en Expo Go. Se carga con require dentro de
@@ -25,8 +29,9 @@ export type GoogleSignInResult = "success" | "cancelled";
 
 export class GoogleSignInError extends Error {}
 
-// Abre el selector de cuentas de Google y entra a Firebase con el idToken.
-export async function signInWithGoogle(): Promise<GoogleSignInResult> {
+// Abre el selector de cuentas de Google y devuelve la credencial de Firebase, o
+// null si el usuario cancela. Sirve para entrar y para reautenticar.
+export async function getGoogleCredential(): Promise<AuthCredential | null> {
   if (!GoogleSignin) {
     throw new GoogleSignInError(
       "Google no está disponible en esta versión de la app",
@@ -49,18 +54,17 @@ export async function signInWithGoogle(): Promise<GoogleSignInResult> {
   try {
     await Signin.hasPlayServices({ showPlayServicesUpdateDialog: true });
     const response = await Signin.signIn();
-    if (!isSuccessResponse(response)) return "cancelled";
+    if (!isSuccessResponse(response)) return null;
 
     const idToken = response.data.idToken;
     if (!idToken) {
       throw new GoogleSignInError("Google no devolvió un token de acceso");
     }
-    await signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
-    return "success";
+    return GoogleAuthProvider.credential(idToken);
   } catch (err) {
     if (isErrorWithCode(err)) {
-      if (err.code === statusCodes.SIGN_IN_CANCELLED) return "cancelled";
-      if (err.code === statusCodes.IN_PROGRESS) return "cancelled";
+      if (err.code === statusCodes.SIGN_IN_CANCELLED) return null;
+      if (err.code === statusCodes.IN_PROGRESS) return null;
       if (err.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
         throw new GoogleSignInError(
           "Se necesitan los servicios de Google Play para iniciar sesión",
@@ -69,6 +73,14 @@ export async function signInWithGoogle(): Promise<GoogleSignInResult> {
     }
     throw err;
   }
+}
+
+// Abre el selector de cuentas de Google y entra a Firebase con el idToken.
+export async function signInWithGoogle(): Promise<GoogleSignInResult> {
+  const credential = await getGoogleCredential();
+  if (!credential) return "cancelled";
+  await signInWithCredential(auth, credential);
+  return "success";
 }
 
 // Cierra también la sesión de Google para que la próxima vez deje elegir cuenta.

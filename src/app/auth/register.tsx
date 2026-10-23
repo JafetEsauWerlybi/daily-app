@@ -1,11 +1,12 @@
 import { useTheme } from "@/contexts/theme-context";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { FontAwesomeIcon } from "@fortawesome/react-native-fontawesome";
+import { faGoogle } from "@fortawesome/free-brands-svg-icons";
 import { faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
 import { useAuth } from "@/contexts/auth-context";
-import { Link } from "expo-router";
+import { Link, useRouter } from "expo-router";
 
 export default function RegisterScreen() {
   const { colors } = useTheme();
@@ -16,7 +17,26 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const { register } = useAuth();
+  const { user, register, loginWithGoogle } = useAuth();
+  const router = useRouter();
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  // Igual que en login: al haber sesión se entra a la app.
+  useEffect(() => {
+    if (user) router.navigate("/(tabs)/hoy");
+  }, [user, router]);
+
+  const handleGoogle = async () => {
+    setGoogleLoading(true);
+    setError("");
+    try {
+      await loginWithGoogle();
+    } catch (err: any) {
+      setError(err?.message || "No se pudo continuar con Google");
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const handleRegister = async () => {
     if (!name || !email || !password) {
@@ -133,6 +153,30 @@ export default function RegisterScreen() {
               </Text>
             )}
           </TouchableOpacity>
+
+          {/* Divider */}
+          <View className="flex-row items-center my-4">
+            <View className="flex-1 h-px bg-gray-700" />
+            <Text className="mx-2 text-gray-500 text-xs">OR</Text>
+            <View className="flex-1 h-px bg-gray-700" />
+          </View>
+
+          {/* Google */}
+          <View className="flex-row justify-center">
+            <TouchableOpacity
+              className={`w-11 h-11 rounded-lg bg-slate-800 border border-gray-700 justify-center items-center ${
+                googleLoading || loading ? "opacity-60" : ""
+              }`}
+              onPress={handleGoogle}
+              disabled={googleLoading || loading}
+            >
+              {googleLoading ? (
+                <ActivityIndicator size="small" color={colors.accent} />
+              ) : (
+                <FontAwesomeIcon icon={faGoogle} size={20} color={colors.accent} />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Footer */}

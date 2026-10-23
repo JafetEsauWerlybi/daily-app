@@ -6,6 +6,7 @@ import {
   faListCheck,
   faTableCellsLarge,
   faCalendarDays,
+  faNoteSticky,
   faUser,
 } from '@fortawesome/free-solid-svg-icons';
 
@@ -53,6 +54,15 @@ export default function TabsLayout() {
           title: 'Calendario',
           tabBarLabel: 'Calendario',
           tabBarIcon: ({ color }) => <FontAwesomeIcon icon={faCalendarDays} size={20} color={color} />,
+        }}
+      />
+
+      <Tabs.Screen
+        name="notas"
+        options={{
+          title: 'Notas',
+          tabBarLabel: 'Notas',
+          tabBarIcon: ({ color }) => <FontAwesomeIcon icon={faNoteSticky} size={20} color={color} />,
         }}
       />
 
