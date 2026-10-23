@@ -12,6 +12,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { describeFirestoreError } from "@/lib/firestore-error";
 import { Task } from "@/types/task";
 
 export function useTasks(userId: string | undefined) {
@@ -43,7 +44,7 @@ export function useTasks(userId: string | undefined) {
           setSyncing(false);
         },
         (err) => {
-          setError(err.message);
+          setError(describeFirestoreError(err, "Error loading tasks"));
           setLoading(false);
           setSyncing(false);
         },
@@ -51,14 +52,17 @@ export function useTasks(userId: string | undefined) {
 
       return unsubscribe;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error loading tasks");
+      setError(describeFirestoreError(err, "Error loading tasks"));
       setLoading(false);
       setSyncing(false);
     }
   }, [userId, refreshKey]);
 
+  const clearError = () => setError(null);
+
   // Vuelve a suscribirse a Firestore para traer el estado más reciente.
   const refresh = () => {
+    setError(null);
     setSyncing(true);
     setRefreshKey((k) => k + 1);
   };
@@ -79,7 +83,7 @@ export function useTasks(userId: string | undefined) {
       batch.delete(doc(db, "tasks", taskId));
       await batch.commit();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error deleting task");
+      setError(describeFirestoreError(err, "Error deleting task"));
     }
   };
 
@@ -91,7 +95,7 @@ export function useTasks(userId: string | undefined) {
         updatedAt: serverTimestamp(),
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error updating task");
+      setError(describeFirestoreError(err, "Error updating task"));
     }
   };
 
@@ -109,7 +113,7 @@ export function useTasks(userId: string | undefined) {
         updatedAt: serverTimestamp(),
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error adding task");
+      setError(describeFirestoreError(err, "Error adding task"));
     }
   };
 
@@ -118,6 +122,7 @@ export function useTasks(userId: string | undefined) {
     loading,
     syncing,
     error,
+    clearError,
     refresh,
     deleteTask,
     updateTaskEnd,

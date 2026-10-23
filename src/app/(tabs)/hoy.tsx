@@ -1,6 +1,7 @@
 import { useTheme } from "@/contexts/theme-context";
 import { AddTaskData, AddTaskModal } from "@/components/AddTaskModal";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { ErrorBanner } from "@/components/ErrorBanner";
 import { TaskDetailsModal } from "@/components/TaskDetailsModal";
 import { TaskRow } from "@/components/TaskRow";
 import { useAuth } from "@/contexts/auth-context";
@@ -31,12 +32,20 @@ export default function HoyScreen() {
   const { user } = useAuth();
   const today = new Date();
   const todayStr = toDateStr(today);
-  const { tasks, loading, addTask } = useTasks(user?.uid);
-  const { isCompleted, setCompleted } = useTaskLogs(
-    user?.uid,
-    todayStr,
-    todayStr,
-  );
+  const {
+    tasks,
+    loading,
+    addTask,
+    error: tasksError,
+    clearError: clearTasksError,
+  } = useTasks(user?.uid);
+  const {
+    isCompleted,
+    setCompleted,
+    error: logsError,
+    clearError: clearLogsError,
+  } = useTaskLogs(user?.uid, todayStr, todayStr);
+  const error = tasksError ?? logsError;
   const [newTaskText, setNewTaskText] = useState("");
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -173,6 +182,14 @@ export default function HoyScreen() {
           {completedCount}/{todayTasks.length}
         </Text>
       </View>
+
+      <ErrorBanner
+        message={error}
+        onDismiss={() => {
+          clearTasksError();
+          clearLogsError();
+        }}
+      />
 
       <View className="flex-1">
         {/* Tasks List */}

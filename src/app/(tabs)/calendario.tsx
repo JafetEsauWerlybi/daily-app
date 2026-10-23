@@ -8,6 +8,7 @@ import { MonthGrid } from "@/components/calendar/MonthGrid";
 import { WeekStrip } from "@/components/calendar/WeekStrip";
 import { YearGrid } from "@/components/calendar/YearGrid";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { ErrorBanner } from "@/components/ErrorBanner";
 import { TaskAction, TaskDetailsModal } from "@/components/TaskDetailsModal";
 import { MONTHS } from "@/constants/dates";
 import { useAuth } from "@/contexts/auth-context";
@@ -109,11 +110,15 @@ export default function CalendarioScreen() {
     loading: tasksLoading,
     deleteTask,
     updateTaskEnd,
+    error: tasksError,
+    clearError: clearTasksError,
   } = useTasks(user?.uid);
   const {
     isCompleted,
     setCompleted,
     loading: logsLoading,
+    error: logsError,
+    clearError: clearLogsError,
   } = useTaskLogs(user?.uid, logFrom, logTo);
 
   const getCounts = (date: Date) => countDay(tasks, date, isCompleted);
@@ -321,6 +326,14 @@ export default function CalendarioScreen() {
           </TouchableOpacity>
         )}
       </View>
+
+      <ErrorBanner
+        message={tasksError ?? logsError}
+        onDismiss={() => {
+          clearTasksError();
+          clearLogsError();
+        }}
+      />
 
       <CalendarModeSwitch mode={mode} onChange={changeMode} />
 

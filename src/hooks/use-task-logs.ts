@@ -9,6 +9,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { describeFirestoreError } from "@/lib/firestore-error";
 import { logId } from "@/lib/task-schedule";
 import { TaskLog } from "@/types/task";
 
@@ -50,14 +51,17 @@ export function useTaskLogs(
         setSyncing(false);
       },
       (err) => {
-        setError(err.message);
+        setError(describeFirestoreError(err, "Error loading task logs"));
         setLoading(false);
         setSyncing(false);
       },
     );
   }, [userId, from, to, refreshKey]);
 
+  const clearError = () => setError(null);
+
   const refresh = () => {
+    setError(null);
     setSyncing(true);
     setRefreshKey((k) => k + 1);
   };
@@ -80,9 +84,18 @@ export function useTaskLogs(
         updatedAt: serverTimestamp(),
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error updating task log");
+      setError(describeFirestoreError(err, "Error updating task log"));
     }
   };
 
-  return { logs, loading, syncing, error, refresh, isCompleted, setCompleted };
+  return {
+    logs,
+    loading,
+    syncing,
+    error,
+    clearError,
+    refresh,
+    isCompleted,
+    setCompleted,
+  };
 }

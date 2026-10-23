@@ -1,6 +1,6 @@
 # Firestore Security Rules
 
-Estos son las reglas de seguridad que debes configurar en Firebase Console para proteger tus datos.
+Estas son las reglas de seguridad que debes configurar en Firebase Console para proteger tus datos.
 
 ## Pasos para agregar las reglas:
 
@@ -12,15 +12,27 @@ Estos son las reglas de seguridad que debes configurar en Firebase Console para 
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Los usuarios solo pueden leer/escribir sus propias tareas
+    // Tareas: cada usuario solo accede a las suyas (campo userId == auth.uid)
     match /tasks/{taskId} {
-      allow read, write: if request.auth.uid == resource.data.userId;
-      allow create: if request.auth.uid == request.resource.data.userId;
+      allow read, delete: if request.auth != null
+        && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.userId;
+      // update: debe ser el dueño y no puede cambiar el userId
+      allow update: if request.auth != null
+        && request.auth.uid == resource.data.userId
+        && request.resource.data.userId == resource.data.userId;
     }
 
-    // Los usuarios solo pueden leer/escribir sus propios datos de perfil
+    // Perfil del usuario
     match /users/{userId} {
-      allow read, write: if request.auth.uid == userId;
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // Logs de cumplimiento: users/{uid}/taskLogs/{taskId}_{YYYY-MM-DD}
+      // Las reglas de un documento NO bajan a sus subcolecciones, por eso va aparte.
+      match /taskLogs/{logId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
     // Denegar acceso a todo lo demás
@@ -33,16 +45,17 @@ service cloud.firestore {
 
 ## Explicación:
 
-- **tasks**: Cada usuario solo puede ver y modificar sus propias tareas (donde `userId` coincide con su `auth.uid`)
-- **users**: Cada usuario solo puede ver y modificar su propio perfil
-- El resto está bloqueado
+- **tasks**: cada usuario solo puede ver y modificar sus propias tareas. `update` además impide reasignar la tarea a otro `userId`; `delete` lo usa la acción "Eliminar tarea".
+- **users/{uid}**: cada usuario solo accede a su propio perfil.
+- **users/{uid}/taskLogs**: los logs de cumplimiento (marcar/desmarcar tareas). Sin esta regla la app falla al marcar tareas y el calendario no muestra completadas.
+- El resto está bloqueado.
 
 ## Después de agregar las reglas:
 
 1. Clickea "Publish" para aplicar las reglas
-2. Listo, ahora la app está asegurada
+2. Si algo falla, la app muestra un aviso rojo en Hoy, Tablero y Calendario con el motivo (p. ej. "No tienes permiso…")
 
 ## Importante:
 
-- Siempre verifica que `userId` en tus tareas sea igual al `auth.uid` del usuario autenticado
-- Estas reglas son restrictivas — solo el dueño de los datos puede verlos/modificarlos
+- `deleteTask` consulta `users/{uid}/taskLogs` por `taskId` y los borra en lote junto con la tarea; la regla de `taskLogs` lo permite porque el dueño tiene lectura y escritura.
+- Estas reglas son restrictivas: solo el dueño de los datos puede verlos/modificarlos.

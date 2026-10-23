@@ -298,6 +298,7 @@ export function AddTaskModal({
 
   const handleSave = () => {
     if (!title.trim() || (recurring && repeatDays.length === 0)) return;
+    if (recurring && dateEnd && dateStart && dateEnd < dateStart) return;
     // Tarea de un solo día: solo dateStart (sin repeatDays, ver isTaskForDate).
     onSubmit({
       title: title.trim(),
@@ -311,8 +312,12 @@ export function AddTaskModal({
     onClose();
   };
 
+  // Los "YYYY-MM-DD" se comparan bien como texto. Fin anterior a Inicio haría
+  // que la tarea recurrente nunca aparezca.
+  const endBeforeStart = recurring && !!dateStart && !!dateEnd && dateEnd < dateStart;
   // Con recurrencia hace falta al menos un día; sin ella no hay días que elegir.
-  const saveDisabled = recurring && repeatDays.length === 0;
+  const saveDisabled =
+    (recurring && repeatDays.length === 0) || endBeforeStart;
 
   if (!mounted) return null;
 
@@ -469,9 +474,11 @@ export function AddTaskModal({
               {recurring && (
                 <TouchableOpacity
                   className={`flex-1 bg-slate-800 border rounded-lg px-3 py-2.5 ${
-                    activeDatePicker === "end"
-                      ? "border-purple-400"
-                      : "border-gray-700"
+                    endBeforeStart
+                      ? "border-red-500"
+                      : activeDatePicker === "end"
+                        ? "border-purple-400"
+                        : "border-gray-700"
                   }`}
                   onPress={() => openDatePicker("end")}
                 >
@@ -488,6 +495,15 @@ export function AddTaskModal({
                 </TouchableOpacity>
               )}
             </View>
+
+            {endBeforeStart && (
+              <Text
+                className="text-xs text-red-500 mb-2"
+                style={{ fontFamily: "MomoTrustSans-Regular" }}
+              >
+                La fecha de fin no puede ser anterior al inicio.
+              </Text>
+            )}
 
             <View
               className="bg-slate-800 border border-gray-700 rounded-lg py-0.5 mb-2 items-center"
