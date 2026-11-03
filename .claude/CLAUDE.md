@@ -361,7 +361,7 @@ src/
 │   │   ├── _layout.tsx          (Auth stack navigator)
 │   │   ├── login.tsx
 │   │   ├── register.tsx
-│   │   └── forgot-password.tsx  (3 steps: email → code → password)
+│   │   └── forgot-password.tsx  (un solo paso: correo → enlace, sección 13)
 │   ├── apariencia.tsx           (Tema claro/oscuro + rueda de color de acento; ver sección 10)
 │   ├── nota.tsx                 (Editor de una nota con autoguardado, sección 16)
 │   ├── notificaciones.tsx / cuenta.tsx / privacidad.tsx / ayuda.tsx  (Sub-pantallas de Perfil, sección 13)
@@ -547,7 +547,7 @@ npx tsc --noEmit
 
 ---
 
-## 📌 Última Sesión: 2026-10-23
+## 📌 Última Sesión: 2026-10-23 (docs revisadas el 2026-11-03)
 
 **Logros:**
 ✅ Add Task Modal: validación Fin ≥ Inicio (borde rojo, mensaje, Guardar deshabilitado) (sección 12)
@@ -562,6 +562,8 @@ npx tsc --noEmit
 ✅ Notificaciones pulidas: no avisan de lo ya completado y tocarlas abre la tarea en Hoy (sección 11)
 ✅ Eliminar cuenta (reautenticación + borrado de datos) y botón de Google en Registro (secciones 13 y 14)
 ✅ Pestaña **Notas** nueva e independiente: lista, búsqueda, fijar, colores, selección múltiple y editor con autoguardado (sección 16). Sin probar en el teléfono
+
+**2026-11-03 — revisión de documentación:** el repo estaba limpio (último commit `e6c3e19`, sin cambios nuevos de código). Se alinearon `G:\daily\README.md` y `G:\daily\MOBILE_APP.md` (spec de diseño y guía móvil: 5 tabs, Notas, perfil real, Google, recuperar contraseña en un paso, notificaciones, dev build), `SETUP.md` y `README.md` del repo (era la plantilla de Expo). Sin código deshabilitado ni `console.log` de stub en `src`. Nota: `be-daily` solo tiene un `index.js` mínimo (no hay backend propio; todo va a Firebase).
 
 **Pendiente inmediato:** publicar las reglas de `notes` en Firebase y probar la pestaña Notas en el teléfono (recargar con Metro; el APK actual sirve, no hay dependencias nativas nuevas).
 
