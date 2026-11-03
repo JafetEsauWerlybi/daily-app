@@ -2,6 +2,7 @@ import { useTheme } from "@/contexts/theme-context";
 import { AddTaskData, AddTaskModal } from "@/components/AddTaskModal";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { OfflineBanner } from "@/components/OfflineBanner";
 import { TaskDetailsModal } from "@/components/TaskDetailsModal";
 import { TaskRow } from "@/components/TaskRow";
 import { useAuth } from "@/contexts/auth-context";
@@ -37,6 +38,7 @@ export default function HoyScreen() {
     tasks,
     loading,
     addTask,
+    fromCache,
     error: tasksError,
     clearError: clearTasksError,
   } = useTasks(user?.uid);
@@ -193,6 +195,7 @@ export default function HoyScreen() {
         </Text>
       </View>
 
+      <OfflineBanner fromCache={fromCache} />
       <ErrorBanner
         message={error}
         onDismiss={() => {

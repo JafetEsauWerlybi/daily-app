@@ -19,6 +19,8 @@ export function useTasks(userId: string | undefined) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  // true cuando los datos vienen de la caché local sin confirmar con el servidor.
+  const [fromCache, setFromCache] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,12 +36,14 @@ export function useTasks(userId: string | undefined) {
 
       const unsubscribe = onSnapshot(
         q,
+        { includeMetadataChanges: true },
         (snapshot) => {
           const tasksData: Task[] = [];
           snapshot.forEach((doc) => {
             tasksData.push({ id: doc.id, ...doc.data() } as Task);
           });
           setTasks(tasksData);
+          setFromCache(snapshot.metadata.fromCache);
           setLoading(false);
           setSyncing(false);
         },
@@ -119,6 +123,7 @@ export function useTasks(userId: string | undefined) {
     tasks,
     loading,
     syncing,
+    fromCache,
     error,
     clearError,
     refresh,

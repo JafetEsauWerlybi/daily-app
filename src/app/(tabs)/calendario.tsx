@@ -9,6 +9,7 @@ import { WeekStrip } from "@/components/calendar/WeekStrip";
 import { YearGrid } from "@/components/calendar/YearGrid";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { OfflineBanner } from "@/components/OfflineBanner";
 import { TaskAction, TaskDetailsModal } from "@/components/TaskDetailsModal";
 import { MONTHS } from "@/constants/dates";
 import { useAuth } from "@/contexts/auth-context";
@@ -110,6 +111,7 @@ export default function CalendarioScreen() {
     loading: tasksLoading,
     deleteTask,
     updateTaskEnd,
+    fromCache,
     error: tasksError,
     clearError: clearTasksError,
   } = useTasks(user?.uid);
@@ -327,6 +329,7 @@ export default function CalendarioScreen() {
         )}
       </View>
 
+      <OfflineBanner fromCache={fromCache} />
       <ErrorBanner
         message={tasksError ?? logsError}
         onDismiss={() => {

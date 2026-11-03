@@ -1,6 +1,7 @@
 import { useTheme } from "@/contexts/theme-context";
 import { TaskDetailsModal } from "@/components/TaskDetailsModal";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { OfflineBanner } from "@/components/OfflineBanner";
 import { TaskRow } from "@/components/TaskRow";
 import { useAuth } from "@/contexts/auth-context";
 import { useBackHandler } from "@/hooks/use-back-handler";
@@ -147,6 +148,7 @@ export default function TableroScreen() {
         </TouchableOpacity>
       </View>
 
+      <OfflineBanner fromCache={tasksState.fromCache} />
       <ErrorBanner
         message={tasksState.error ?? logsState.error}
         onDismiss={() => {
