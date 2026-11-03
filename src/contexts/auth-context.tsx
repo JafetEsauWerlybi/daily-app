@@ -9,9 +9,9 @@ import {
   onAuthStateChanged,
   updatePassword,
   updateProfile,
-  User,
   sendPasswordResetEmail,
-} from 'firebase/auth';
+  type User,
+} from '@react-native-firebase/auth';
 import {
   collection,
   doc,
@@ -21,7 +21,7 @@ import {
   setDoc,
   where,
   writeBatch,
-} from 'firebase/firestore';
+} from '@react-native-firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import {
   getGoogleCredential,

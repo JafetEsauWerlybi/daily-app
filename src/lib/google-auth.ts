@@ -3,7 +3,7 @@ import {
   AuthCredential,
   GoogleAuthProvider,
   signInWithCredential,
-} from "firebase/auth";
+} from "@react-native-firebase/auth";
 import { auth } from "@/lib/firebase";
 
 // La librería es nativa: no existe en Expo Go. Se carga con require dentro de
