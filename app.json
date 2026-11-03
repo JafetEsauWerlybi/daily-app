@@ -9,7 +9,7 @@
     "userInterfaceStyle": "dark",
     "ios": {
       "icon": "./assets/expo.icon",
-      "supportsTabletMode": false
+      "supportsTablet": false
     },
     "android": {
       "adaptiveIcon": {
