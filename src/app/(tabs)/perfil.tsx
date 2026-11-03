@@ -1,6 +1,8 @@
 import { useTheme } from "@/contexts/theme-context";
-import React from "react";
+import React, { useState } from "react";
 import { View, Text, TouchableOpacity } from "react-native";
+import { disableNetwork, enableNetwork } from "@react-native-firebase/firestore";
+import { db } from "@/lib/firebase";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/react-native-fontawesome";
@@ -12,6 +14,7 @@ import {
   faCircleQuestion,
   faRightFromBracket,
   faChevronRight,
+  faPlugCircleXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import { Href, useRouter } from "expo-router";
 import { useAuth } from "@/contexts/auth-context";
@@ -36,6 +39,19 @@ export default function PerfilScreen() {
   const { user, logout } = useAuth();
   const { show: showLoading } = useLoading();
   useBackHandler("perfil");
+
+  // Solo desarrollo: simula "sin internet" en Firestore sin apagar el Wi-Fi, que
+  // Metro necesita para cargar el código en el APK de desarrollo.
+  const [simulateOffline, setSimulateOffline] = useState(false);
+  const toggleSimulatedOffline = async () => {
+    try {
+      if (simulateOffline) await enableNetwork(db);
+      else await disableNetwork(db);
+      setSimulateOffline(!simulateOffline);
+    } catch (err) {
+      console.warn("[offline-dev] no se pudo cambiar la red de Firestore:", err);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -113,6 +129,29 @@ export default function PerfilScreen() {
               />
             </TouchableOpacity>
           ))}
+
+          {__DEV__ && (
+            <TouchableOpacity
+              className="bg-slate-800 rounded-lg px-4 py-3.5 flex-row justify-between items-center mt-4 border border-gray-700"
+              onPress={toggleSimulatedOffline}
+            >
+              <View className="flex-row items-center gap-3">
+                <FontAwesomeIcon
+                  icon={faPlugCircleXmark}
+                  size={16}
+                  color={simulateOffline ? "#ef4444" : colors.accent}
+                />
+                <Text
+                  className="text-sm text-gray-300"
+                  style={{ fontFamily: "MomoTrustSans-Regular" }}
+                >
+                  {simulateOffline
+                    ? "Sin internet simulado: ACTIVO (tocar para quitar)"
+                    : "Simular sin internet (solo desarrollo)"}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             className="bg-slate-800 rounded-lg px-4 py-3.5 flex-row justify-between items-center mt-4"
