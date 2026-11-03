@@ -1,7 +1,7 @@
 # Daily! App — Guía de Desarrollo & Lecciones Aprendidas
 
 ## 📱 Descripción General
-**Daily!** es una aplicación móvil de tareas personales construida con React Native 0.86.3, Expo 57.0.21, Firebase (Auth + Firestore), TypeScript, y Expo Router. Incluye autenticación real, gestión de tareas en tiempo real, y navegación robusta por pestañas.
+**Daily!** es una aplicación móvil de tareas personales construida con React Native 0.86.3, Expo 57.0.21, React Native Firebase (Auth + Firestore nativos, con modo offline), TypeScript, y Expo Router. Incluye autenticación real, gestión de tareas en tiempo real, y navegación robusta por pestañas.
 
 ---
 
@@ -10,18 +10,18 @@
 ```
 React Native: 0.86.3
 Expo: ~57.0.31 (expo install subió los parches del SDK 57; expo-router ~57.0.29)
-Firebase: 12.18.0 (@firebase/auth 1.13.5, @firebase/firestore)
+React Native Firebase ~26.4.1: @react-native-firebase/app + auth + firestore (SDK nativo; el paquete `firebase` web YA NO se usa). Requiere google-services.json y New Architecture
 Expo Router: Latest (file-based routing)
 NativeWind: Latest (Tailwind CSS para React Native)
 TypeScript: Latest
 FontAwesome: @fortawesome/react-native-fontawesome + @fortawesome/free-solid-svg-icons + @fortawesome/free-brands-svg-icons
-AsyncStorage: @react-native-async-storage/async-storage 2.2.0 (para persistencia de auth)
+AsyncStorage: @react-native-async-storage/async-storage 2.2.0 (solo preferencias locales: tema, ajustes de notificaciones, vista de notas; la sesión de Auth la guarda el SDK nativo)
 SafeAreaContext: react-native-safe-area-context (NO usar SafeAreaView de react-native)
 StatusBar: expo-status-bar (para manejo transparente de barra de estado)
 WheelPicker: @quidone/react-native-wheel-picker (incluye código nativo opcional en el paquete, pero funciona sin rebuild nativo vía Expo Go — usado para date/time pickers tipo rueda)
 Notificaciones: expo-notifications ~57.0.24 (locales; NO funciona en Expo Go de Android, ver sección 11)
 Dev build: expo-dev-client ~57.0.20 + EAS Build (eas.json con perfiles development/preview/production)
-Google Sign-In: @react-native-google-signin/google-signin ^16 (nativo, solo en dev build; idToken → Firebase signInWithCredential)
+Google Sign-In: @react-native-google-signin/google-signin ^16 (nativo, solo en dev build; idToken → signInWithCredential de @react-native-firebase/auth)
 ```
 
 **Entorno de ejecución: development build, ya NO Expo Go.** Desde que se agregó `expo-notifications` la app se corre con un APK de desarrollo (compilado con EAS, ver "Comandos Útiles"), no con Expo Go. Se sigue usando `npx expo start` y Fast Refresh igual; solo hay que recompilar el APK cuando cambian dependencias nativas, plugins o permisos de `app.json`, o la versión de Expo/RN. Mucha documentación de abajo menciona "Expo Go" por haberse escrito antes; el comportamiento de JS descrito sigue vigente.
@@ -74,21 +74,25 @@ const { exitModalVisible, confirmExit, cancelExit } = useBackHandler('hoy');
 />
 ```
 
-### 3. **Firebase Auth con Persistencia Real**
-**Problema:** Auth no persistía entre reinicios de app.
+### 3. **Firebase nativo: sesión y caché offline**
+**Problema:** el SDK web `firebase` en React Native solo tiene caché de Firestore **en memoria** (no hay IndexedDB): al cerrar la app se perdían los cambios hechos sin internet y al abrirla offline todo salía vacío.
 
-**Solución:**
-```tsx
-// src/lib/firebase.ts
-import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
-import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
+**Solución:** `src/lib/firebase.ts` usa `getAuth()` y `getFirestore()` de `@react-native-firebase/*` (SDK nativo). La config sale de `google-services.json` (raíz, referenciado en `app.json → android.googleServicesFile`; plugins `@react-native-firebase/app` y `auth`; **firestore no lleva plugin**). La sesión de Auth y la caché de Firestore (en disco, con cola de escrituras pendientes) las gestiona el SDK nativo.
 
-export const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(ReactNativeAsyncStorage),
-});
-```
+**No repetir:**
+- No volver a instalar/importar el paquete `firebase` (web): Firestore nativo no ve su sesión y daría `permission-denied`.
+- No llamar `useDeviceLanguage()`: en el SDK nativo **lanza** y tumba todas las rutas. El idioma se fija con `auth.languageCode` (ver `firebase.ts`).
+- Cambiar plugins o `google-services.json` requiere nuevo APK; el resto es JS.
+- RN Firebase **27.x** exige Kotlin >= 2.4 y RN 0.86 trae 2.1.20: se usa la línea **26.4.x**.
 
-**NO hacer:** Intentar silenciar warnings con `console.warn` interceptor (Firebase resolverá el warning solo con AsyncStorage instalado).
+### 3b. **Modo offline (Firestore nativo)**
+- **Las escrituras NO se esperan con `await`** (`saveNote`, `setPinned`, `deleteNotes`, `setCompleted`, `addTask`, `updateTaskEnd`, `deleteTask` son síncronas, `void`): la promesa de Firestore solo se resuelve al confirmar el servidor y sin internet quedaría colgada. El cambio ya está en la caché local y los `onSnapshot` se actualizan al instante; los fallos van a `error`/`ErrorBanner`.
+- `deleteTask` lee los logs con `getDocsFromCache` (no del servidor) para poder borrar offline; un log fuera de caché queda huérfano, es inofensivo.
+- `useTasks` expone `fromCache` (snapshot con `includeMetadataChanges`); `components/OfflineBanner.tsx` muestra "Sin conexión..." tras 2.5 s en Hoy, Tablero y Calendario. Notas no tiene aviso.
+- `describeFirestoreError` quita el prefijo `firestore/` de los códigos nativos.
+- **Probar offline en el APK `development`:** el modo avión no sirve (Metro necesita el Wi-Fi). Perfil → "Simular sin internet (solo desarrollo)" (solo `__DEV__`) llama `disableNetwork/enableNetwork`. Cerrar y reabrir sin internet de verdad solo se prueba con el APK `preview`.
+- Lo que sigue necesitando internet: login, registro, Google, recuperar/cambiar contraseña, eliminar cuenta y el **primer** arranque en un teléfono.
+- Tras migrar, cada usuario tuvo que iniciar sesión otra vez (la sesión del SDK web no se traslada).
 
 ### 4. **Global Loading Overlay**
 **Problema:** LoadingScreen quedaba invisible pero bloqueaba touches (opacity._value nunca llegaba a 0 exacto).
@@ -222,7 +226,7 @@ Rutas de stack en raíz (`src/app/notificaciones.tsx`, `cuenta.tsx`, `privacidad
 ### 14. **Google OAuth (development build)**
 - `src/lib/google-auth.ts`: `signInWithGoogle()` (configura con `webClientId`, `hasPlayServices`, `signIn`, `GoogleAuthProvider.credential(idToken)`, `signInWithCredential`); devuelve `"success" | "cancelled"`. Carga la librería con `require` en `try/catch` (no existe en Expo Go). `auth-context.loginWithGoogle` crea `users/{uid}` solo si no existe; `logout` también cierra la sesión de Google.
 - El **Web client ID** vive en `app.json → expo.extra.googleWebClientId` (no en `.env`: EAS no sube archivos ignorados por git). No es secreto.
-- Configuración externa que ya está hecha: Google habilitado en Firebase Auth; app Android `com.daily.app` registrada en Firebase con el **SHA-1 del keystore de EAS** (`npx eas-cli credentials`, las credenciales por defecto se comparten entre perfiles). No se usa `google-services.json`.
+- Configuración externa que ya está hecha: Google habilitado en Firebase Auth; app Android `com.daily.app` registrada en Firebase con el **SHA-1 del keystore de EAS** (`npx eas-cli credentials`, las credenciales por defecto se comparten entre perfiles). Desde la migración a RN Firebase **sí** se usa `google-services.json` (en la raíz, versionado).
 - **Pendiente al publicar en Play Store:** agregar también el SHA-1 de la firma de Google Play (App Signing), si no, Google Sign-In falla en la versión publicada.
 - Login y Registro tienen botón de Google (`loginWithGoogle` crea la cuenta si no existe). `getGoogleCredential()` se reutiliza para reautenticar al eliminar la cuenta.
 
@@ -374,6 +378,7 @@ src/
 │   ├── TaskDetailsModal.tsx     (Detalle de solo lectura de una ocurrencia; mismo patrón de overlay)
 │   ├── TaskRow.tsx              (Fila compartida Hoy/Tablero/Calendario: círculo + título + chips; estados completed/pending/missed)
 │   ├── ErrorBanner.tsx          (Aviso rojo cerrable para errores de Firestore, ver sección 12)
+│   ├── OfflineBanner.tsx        (Aviso "Sin conexión" cuando los datos vienen de caché, sección 3b)
 │   ├── NoteCard.tsx             (Tarjeta de nota: color, fijada, selección)
 │   ├── ScreenHeader.tsx         (Flecha + título de las sub-pantallas de Perfil, sección 13)
 │   ├── NotificationSync.tsx     (Sin UI; mantiene las notificaciones locales al día, ver sección 11)
@@ -398,7 +403,7 @@ src/
 │   └── [otros hooks...]
 ├── lib/
 │   ├── theme.ts                 (Paletas claro/oscuro, buildTheme, utilidades hex/hsv)
-│   ├── firebase.ts              (initializeAuth con AsyncStorage)
+│   ├── firebase.ts              (auth y db del SDK nativo @react-native-firebase, sección 3)
 │   ├── firestore-error.ts       (describeFirestoreError: códigos de Firestore → mensajes en español)
 │   ├── note-format.ts           (formatNoteDate)
 │   ├── google-auth.ts           (signInWithGoogle/signOutFromGoogle, carga tolerante, sección 14)
@@ -482,6 +487,9 @@ module.exports = withNativeWind(config, { input: './src/global.css' });
 | `expo install <paquete>` subió muchos paquetes | Alinea todo el SDK 57 a sus últimos parches (expo 57.0.21 → 57.0.31, etc.) | Revisar `git diff package.json` tras cada `expo install` | No asumir que instalar un paquete solo agrega ese paquete |
 | Google Sign-In falla con `DEVELOPER_ERROR` / config | Falta la app Android o el SHA-1 del keystore en Firebase, o `googleWebClientId` vacío | App `com.daily.app` + SHA-1 de `eas credentials` en Firebase; Web client ID en `app.json → extra` | No usar `.env` para el client ID (EAS no sube archivos ignorados); al publicar agregar el SHA-1 de Play App Signing |
 | Flujo "código de 6 dígitos" para recuperar contraseña | Firebase solo envía enlace por correo desde el cliente | Un solo paso con `sendPasswordResetEmail` | No reintroducir pasos de código/nueva contraseña dentro de la app |
+| Cambios hechos sin internet se perdían al cerrar la app | El SDK web de Firebase en RN solo tiene caché de Firestore en memoria | Migrar a `@react-native-firebase/*` (caché en disco + cola de escrituras), secciones 3 y 3b | No volver al paquete `firebase` web; no usar `await` en escrituras de Firestore desde la UI |
+| Todas las rutas con "missing default export" + `useDeviceLanguage is unsupported by the native Firebase SDKs` | `useDeviceLanguage()` lanza en el SDK nativo y se ejecutaba al importar `firebase.ts` | Fijar `auth.languageCode` a mano | No llamar APIs solo-web del SDK sin revisar el `.d.ts` de RN Firebase |
+| EAS aborta el build en `expo doctor` | `ios.supportsTabletMode` no existe en el esquema de Expo | Se renombró a `supportsTablet` | Correr `npx expo-doctor` antes de `eas build` |
 | Tareas/logs no se guardan o no se leen (silencioso) | Las reglas de `users/{uid}` no cubren la subcolección `taskLogs` | `match /taskLogs/{logId}` explícito (ver `FIRESTORE_RULES.md`) | Las reglas de un documento no bajan a sus subcolecciones |
 
 ---
@@ -547,7 +555,7 @@ npx tsc --noEmit
 
 ---
 
-## 📌 Última Sesión: 2026-10-23 (docs revisadas el 2026-11-03)
+## 📌 Última Sesión: 2026-11-03 (modo offline) — antes: 2026-10-23
 
 **Logros:**
 ✅ Add Task Modal: validación Fin ≥ Inicio (borde rojo, mensaje, Guardar deshabilitado) (sección 12)
@@ -565,7 +573,9 @@ npx tsc --noEmit
 
 **2026-11-03 — revisión de documentación:** el repo estaba limpio (último commit `e6c3e19`, sin cambios nuevos de código). Se alinearon `G:\daily\README.md` y `G:\daily\MOBILE_APP.md` (spec de diseño y guía móvil: 5 tabs, Notas, perfil real, Google, recuperar contraseña en un paso, notificaciones, dev build), `SETUP.md` y `README.md` del repo (era la plantilla de Expo). Sin código deshabilitado ni `console.log` de stub en `src`. Nota: `be-daily` solo tiene un `index.js` mínimo (no hay backend propio; todo va a Firebase).
 
-**Pendiente inmediato:** publicar las reglas de `notes` en Firebase y probar la pestaña Notas en el teléfono (recargar con Metro; el APK actual sirve, no hay dependencias nativas nuevas).
+**2026-11-03 — modo offline (rama `feat/offline-rnfirebase`):** migración a React Native Firebase (secciones 3 y 3b), `OfflineBanner`, botón de desarrollo "Simular sin internet", `supportsTablet` corregido. Verificado en el dev build: con Firestore desconectado los cambios se ven al instante, sobreviven al cerrar la app y se suben al reconectar (comprobado en Firebase Console).
+
+**Pendiente inmediato:** (1) build `preview` y probar con él cerrar/reabrir **sin internet real**; (2) publicar las reglas de `notes` si no se ha hecho; (3) repartir el APK `preview` (enlace de EAS o `.apk` directo); (4) opcional: `expo-updates` para mandar arreglos de JS sin recompilar.
 
 **Ojo:** `npx expo install` subió los parches de todo el SDK 57 (revisar `package.json` al commitear). El APK `development` necesita Metro corriendo; para uso diario sin PC compilar `preview`.
 

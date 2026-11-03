@@ -2,7 +2,7 @@
 
 ## Completado ✅
 
-- [x] Firebase configurado (Auth + Firestore)
+- [x] Firebase configurado con React Native Firebase (Auth + Firestore nativos, modo offline)
 - [x] Auth screens (Login, Register, Olvidé mi contraseña) con Google Sign-In
 - [x] 5 tabs principales (Hoy, Tablero, Calendario, Notas, Perfil)
 - [x] Tareas con recurrencia y logs de cumplimiento
@@ -53,18 +53,13 @@ Recompilar solo cuando cambian dependencias nativas, plugins/permisos de `app.js
 
 ## Firebase Config
 
-La config ya está en `src/lib/firebase.ts`. Si necesitas cambiarla:
+La app usa **React Native Firebase** (SDK nativo), no el paquete web `firebase`. La configuración sale de `google-services.json` en la raíz del proyecto (descargado de Firebase Console, Configuración del proyecto, app Android `com.daily.app`) y está referenciado en `app.json → expo.android.googleServicesFile`. Los plugins `@react-native-firebase/app` y `@react-native-firebase/auth` van en `app.json`; `firestore` no lleva plugin. `src/lib/firebase.ts` solo exporta `auth` y `db`.
 
-```typescript
-const firebaseConfig = {
-  apiKey: "AIzaSyDHFdyzKpJcO9pVfTY9iXIhYZZJrXokWos",
-  authDomain: "daily-app-80801.firebaseapp.com",
-  projectId: "daily-app-80801",
-  storageBucket: "daily-app-80801.firebasestorage.app",
-  messagingSenderId: "345898052899",
-  appId: "1:345898052899:web:ef1e755b59b977e8efb096",
-};
-```
+Cambiar `google-services.json` o los plugins requiere recompilar el APK.
+
+### Modo offline
+
+Firestore nativo guarda los datos en disco y mantiene una cola de escrituras: se puede crear, marcar y editar sin internet, incluso cerrando la app, y se sincroniza al reconectar. Sigue necesitando internet: login/registro/Google, recuperar o cambiar contraseña, eliminar cuenta y el primer arranque en un teléfono nuevo. En el APK de desarrollo, Perfil → "Simular sin internet" permite probarlo sin apagar el Wi-Fi que usa Metro.
 
 ## Estructura de carpetas
 
