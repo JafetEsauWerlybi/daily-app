@@ -7,7 +7,7 @@ import {
   query,
   setDoc,
   writeBatch,
-} from "firebase/firestore";
+} from "@react-native-firebase/firestore";
 import { db } from "@/lib/firebase";
 import { describeFirestoreError } from "@/lib/firestore-error";
 import { Note } from "@/types/note";
@@ -52,46 +52,40 @@ export function useNotes(userId: string | undefined) {
     doc(collection(db, "users", userId as string, "notes")).id;
 
   // Crea o actualiza (merge). `createdAt` solo se manda al crear.
-  const saveNote = async (id: string, fields: NoteFields, createdAt?: number) => {
+  // No se espera la promesa: sin internet solo se resuelve al volver la conexión,
+  // pero el cambio ya está en la caché local y la lista se actualiza al instante.
+  const saveNote = (id: string, fields: NoteFields, createdAt?: number) => {
     if (!userId) return;
-    try {
-      await setDoc(
-        doc(db, "users", userId, "notes", id),
-        {
-          ...fields,
-          ...(createdAt !== undefined ? { createdAt } : {}),
-          updatedAt: Date.now(),
-        },
-        { merge: true },
-      );
-    } catch (err) {
-      setError(describeFirestoreError(err, "Error saving note"));
-    }
+    setDoc(
+      doc(db, "users", userId, "notes", id),
+      {
+        ...fields,
+        ...(createdAt !== undefined ? { createdAt } : {}),
+        updatedAt: Date.now(),
+      },
+      { merge: true },
+    ).catch((err) => setError(describeFirestoreError(err, "Error saving note")));
   };
 
-  const setPinned = async (ids: string[], pinned: boolean) => {
+  const setPinned = (ids: string[], pinned: boolean) => {
     if (!userId || ids.length === 0) return;
-    try {
-      const batch = writeBatch(db);
-      // Fijar no cambia la fecha de edición: la nota conserva su lugar entre las demás.
-      ids.forEach((id) =>
-        batch.update(doc(db, "users", userId, "notes", id), { pinned }),
-      );
-      await batch.commit();
-    } catch (err) {
-      setError(describeFirestoreError(err, "Error updating notes"));
-    }
+    const batch = writeBatch(db);
+    // Fijar no cambia la fecha de edición: la nota conserva su lugar entre las demás.
+    ids.forEach((id) =>
+      batch.update(doc(db, "users", userId, "notes", id), { pinned }),
+    );
+    batch
+      .commit()
+      .catch((err) => setError(describeFirestoreError(err, "Error updating notes")));
   };
 
-  const deleteNotes = async (ids: string[]) => {
+  const deleteNotes = (ids: string[]) => {
     if (!userId || ids.length === 0) return;
-    try {
-      const batch = writeBatch(db);
-      ids.forEach((id) => batch.delete(doc(db, "users", userId, "notes", id)));
-      await batch.commit();
-    } catch (err) {
-      setError(describeFirestoreError(err, "Error deleting notes"));
-    }
+    const batch = writeBatch(db);
+    ids.forEach((id) => batch.delete(doc(db, "users", userId, "notes", id)));
+    batch
+      .commit()
+      .catch((err) => setError(describeFirestoreError(err, "Error deleting notes")));
   };
 
   return {

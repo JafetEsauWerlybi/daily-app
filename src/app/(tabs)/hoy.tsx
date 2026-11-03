@@ -77,10 +77,10 @@ export default function HoyScreen() {
     };
   }, []);
 
-  const handleQuickAdd = async () => {
+  const handleQuickAdd = () => {
     if (!newTaskText.trim() || !user) return;
 
-    await addTask({
+    addTask({
       userId: user.uid,
       title: newTaskText,
       category: "Personal",
@@ -93,10 +93,10 @@ export default function HoyScreen() {
     setAddModalVisible(true);
   };
 
-  const handleAddTaskSubmit = async (data: AddTaskData) => {
+  const handleAddTaskSubmit = (data: AddTaskData) => {
     if (!user) return;
 
-    await addTask({
+    addTask({
       userId: user.uid,
       title: data.title,
       category: data.category,

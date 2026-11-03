@@ -157,14 +157,14 @@ export default function NotasScreen() {
     );
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     setConfirmDelete(false);
-    await deleteNotes(selectedIds);
+    deleteNotes(selectedIds);
     setSelectedIds([]);
   };
 
-  const handlePin = async () => {
-    await setPinned(selectedIds, !allSelectedPinned);
+  const handlePin = () => {
+    setPinned(selectedIds, !allSelectedPinned);
     setSelectedIds([]);
   };
 

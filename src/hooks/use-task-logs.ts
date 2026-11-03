@@ -7,7 +7,7 @@ import {
   serverTimestamp,
   setDoc,
   where,
-} from "firebase/firestore";
+} from "@react-native-firebase/firestore";
 import { db } from "@/lib/firebase";
 import { describeFirestoreError } from "@/lib/firestore-error";
 import { logId } from "@/lib/task-schedule";
@@ -69,23 +69,18 @@ export function useTaskLogs(
   const isCompleted = (taskId: string, day: string) =>
     logs[logId(taskId, day)]?.completed === true;
 
-  const setCompleted = async (
-    taskId: string,
-    day: string,
-    completed: boolean,
-  ) => {
+  // Sin await: offline la promesa queda pendiente hasta reconectar (ver use-notes).
+  const setCompleted = (taskId: string, day: string, completed: boolean) => {
     if (!userId) return;
-    try {
-      await setDoc(doc(db, "users", userId, "taskLogs", logId(taskId, day)), {
-        taskId,
-        date: day,
-        completed,
-        completedAt: completed ? Date.now() : null,
-        updatedAt: serverTimestamp(),
-      });
-    } catch (err) {
-      setError(describeFirestoreError(err, "Error updating task log"));
-    }
+    setDoc(doc(db, "users", userId, "taskLogs", logId(taskId, day)), {
+      taskId,
+      date: day,
+      completed,
+      completedAt: completed ? Date.now() : null,
+      updatedAt: serverTimestamp(),
+    }).catch((err) =>
+      setError(describeFirestoreError(err, "Error updating task log")),
+    );
   };
 
   return {

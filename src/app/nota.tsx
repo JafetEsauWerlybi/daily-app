@@ -137,11 +137,11 @@ export default function NotaScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     setConfirmDelete(false);
     deleted.current = true;
     const id = noteIdRef.current;
-    if (id && lastSaved.current !== "") await deleteNotes([id]);
+    if (id && lastSaved.current !== "") deleteNotes([id]);
     router.back();
   };
 

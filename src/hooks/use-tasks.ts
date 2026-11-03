@@ -5,12 +5,12 @@ import {
   where,
   onSnapshot,
   doc,
-  getDocs,
+  getDocsFromCache,
   updateDoc,
   writeBatch,
   addDoc,
   serverTimestamp,
-} from "firebase/firestore";
+} from "@react-native-firebase/firestore";
 import { db } from "@/lib/firebase";
 import { describeFirestoreError } from "@/lib/firestore-error";
 import { Task } from "@/types/task";
@@ -67,54 +67,52 @@ export function useTasks(userId: string | undefined) {
     setRefreshKey((k) => k + 1);
   };
 
-  // Borra la tarea junto con sus logs de cumplimiento (users/{uid}/taskLogs).
-  const deleteTask = async (taskId: string) => {
-    try {
-      const batch = writeBatch(db);
-      if (userId) {
-        const logs = await getDocs(
-          query(
-            collection(db, "users", userId, "taskLogs"),
-            where("taskId", "==", taskId),
-          ),
-        );
-        logs.forEach((d) => batch.delete(d.ref));
-      }
-      batch.delete(doc(db, "tasks", taskId));
-      await batch.commit();
-    } catch (err) {
-      setError(describeFirestoreError(err, "Error deleting task"));
-    }
+  // Borra la tarea junto con los logs de cumplimiento (users/{uid}/taskLogs) que haya
+  // en la caché local. Se lee de la caché (no del servidor) para que funcione sin
+  // internet: un log que no esté en caché queda huérfano, y es inofensivo porque los
+  // logs solo se consultan por tarea + día de una tarea existente.
+  const deleteTask = (taskId: string) => {
+    const logsQuery = userId
+      ? query(
+          collection(db, "users", userId, "taskLogs"),
+          where("taskId", "==", taskId),
+        )
+      : null;
+    (logsQuery
+      ? getDocsFromCache(logsQuery).catch(() => null)
+      : Promise.resolve(null)
+    )
+      .then((logs) => {
+        const batch = writeBatch(db);
+        logs?.forEach((d) => batch.delete(d.ref));
+        batch.delete(doc(db, "tasks", taskId));
+        return batch.commit();
+      })
+      .catch((err) =>
+        setError(describeFirestoreError(err, "Error deleting task")),
+      );
   };
 
   // Corta la vigencia de la tarea: deja de ocurrir después de `dateEnd`.
-  const updateTaskEnd = async (taskId: string, dateEnd: string) => {
-    try {
-      await updateDoc(doc(db, "tasks", taskId), {
-        dateEnd,
-        updatedAt: serverTimestamp(),
-      });
-    } catch (err) {
-      setError(describeFirestoreError(err, "Error updating task"));
-    }
+  const updateTaskEnd = (taskId: string, dateEnd: string) => {
+    updateDoc(doc(db, "tasks", taskId), {
+      dateEnd,
+      updatedAt: serverTimestamp(),
+    }).catch((err) =>
+      setError(describeFirestoreError(err, "Error updating task")),
+    );
   };
 
-  const addTask = async (
-    taskData: Omit<Task, "id" | "createdAt" | "updatedAt">,
-  ) => {
-    try {
-      // Firestore rechaza valores `undefined` (campos opcionales sin llenar).
-      const cleanData = Object.fromEntries(
-        Object.entries(taskData).filter(([, v]) => v !== undefined),
-      );
-      await addDoc(collection(db, "tasks"), {
-        ...cleanData,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    } catch (err) {
-      setError(describeFirestoreError(err, "Error adding task"));
-    }
+  const addTask = (taskData: Omit<Task, "id" | "createdAt" | "updatedAt">) => {
+    // Firestore rechaza valores `undefined` (campos opcionales sin llenar).
+    const cleanData = Object.fromEntries(
+      Object.entries(taskData).filter(([, v]) => v !== undefined),
+    );
+    addDoc(collection(db, "tasks"), {
+      ...cleanData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }).catch((err) => setError(describeFirestoreError(err, "Error adding task")));
   };
 
   return {
