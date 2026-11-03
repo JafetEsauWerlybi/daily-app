@@ -1,9 +1,11 @@
 // Traduce errores de Firestore a mensajes que el usuario pueda entender.
 export function describeFirestoreError(err: unknown, fallback: string): string {
-  const code =
+  const rawCode =
     typeof err === "object" && err !== null && "code" in err
       ? String((err as { code: unknown }).code)
       : "";
+  // RN Firebase entrega "firestore/permission-denied"; el SDK web "permission-denied".
+  const code = rawCode.replace(/^firestore\//, "");
 
   switch (code) {
     case "permission-denied":
