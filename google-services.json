@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "345898052899",
+    "project_id": "daily-app-80801",
+    "storage_bucket": "daily-app-80801.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:345898052899:android:c3b43cbf817b35daefb096",
+        "android_client_info": {
+          "package_name": "com.daily.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "345898052899-m3rrmia3t9pl9afhv9oo0mg0am19va6u.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.daily.app",
+            "certificate_hash": "048adde96f052a7c00da978722261ed9693abe89"
+          }
+        },
+        {
+          "client_id": "345898052899-d2ff8uvfj4gkffsdhvvk7bem1oo17ms5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCFyetC9qWuXm3uspMJIzCa6foSzIhtAXc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "345898052899-d2ff8uvfj4gkffsdhvvk7bem1oo17ms5.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
